@@ -74,6 +74,8 @@ def register_account_routes(app, db, login_required, user):
                 picture = ImageOps.fit(ImageOps.exif_transpose(picture).convert('RGBA'), (256, 256))
                 filename = secrets.token_hex(16) + '.png'
                 picture.save(avatar_dir / filename, 'PNG')
+                if app.extensions.get('cloud_files'):
+                    app.extensions['cloud_files'].upload(avatar_dir / filename)
         except (ValueError, OSError, UnidentifiedImageError, Image.DecompressionBombError):
             abort(400, description='头像图片无效或过大，请换一张图片')
         previous = user()['avatar']
@@ -81,6 +83,8 @@ def register_account_routes(app, db, login_required, user):
         db().commit()
         if previous.startswith('upload:'):
             (avatar_dir / previous.split(':', 1)[1]).unlink(missing_ok=True)
+            if app.extensions.get('cloud_files'):
+                app.extensions['cloud_files'].delete(avatar_dir / previous.split(':', 1)[1])
         return jsonify(user=user())
 
     @app.get('/api/avatar')
@@ -90,6 +94,8 @@ def register_account_routes(app, db, login_required, user):
         if not selected.startswith('upload:'):
             abort(404, description='尚未上传头像')
         path = avatar_dir / selected.split(':', 1)[1]
+        if app.extensions.get('cloud_files'):
+            app.extensions['cloud_files'].load(path)
         if not path.is_file():
             abort(404, description='头像不存在')
         return send_file(path, mimetype='image/png')

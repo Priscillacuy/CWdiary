@@ -77,6 +77,7 @@ class AudioService:
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='relax-audio')
         self.lock = threading.Lock()
         self.active = set()
+        self.file_store = None
 
     def _post_audio(self, endpoint, body, path, timeout=90):
         if not self.key:
@@ -98,15 +99,21 @@ class AudioService:
         temporary.replace(path)
 
     def _cached(self, path, producer):
+        if self.file_store:
+            self.file_store.load(path)
         # Covers concurrent requests, repeat workers and local management scripts.
         with path.with_suffix('.lock').open('a') as handle:
             fcntl.flock(handle, fcntl.LOCK_EX)
             if not path.is_file():
                 producer()
+                if self.file_store:
+                    self.file_store.upload(path)
         return path
 
     def music(self, key):
         local = self.directory / 'music' / (key + '.m4a')
+        if self.file_store:
+            self.file_store.load(local)
         if local.is_file():
             return local
         path = self.directory / 'music' / (key + '.mp3')
@@ -153,7 +160,10 @@ class AudioService:
     def _path(self, uid, sid):
         directory = self.directory / 'sessions' / str(uid)
         directory.mkdir(exist_ok=True)
-        return directory / (sid + '.json')
+        path = directory / (sid + '.json')
+        if self.file_store:
+            self.file_store.load(path, refresh=True)
+        return path
 
     def read(self, uid, sid):
         if not re.fullmatch(r'[a-f0-9]{64}', sid):
@@ -168,12 +178,19 @@ class AudioService:
         temporary = path.with_suffix('.tmp')
         temporary.write_text(json.dumps(value, ensure_ascii=False))
         temporary.replace(path)
+        if self.file_store:
+            self.file_store.upload(path)
 
     def prepare(self, uid, analysis_id, plan, minutes, voice, language, mode, source_language=None):
         steps = session_steps(plan, minutes, language)
         track = 'moonlight' if mode == 'sleep' else 'breeze' if any(s['category'] in ('walk','yoga') for s in steps) else 'daylight'
         config = {'steps': steps, 'closing_text': closing(language, mode), 'voice': voice, 'language': language, 'source_language': source_language or language, 'minutes': minutes, 'mode': mode, 'model': self.model, 'music': track, 'guidance_version': 3}
         sid = hashlib.sha256(json.dumps([uid, analysis_id, config], sort_keys=True).encode()).hexdigest()
+        if self.file_store:
+            existing = self.read(uid, sid)
+            if not existing or existing['status'] == 'failed' or (existing['status'] == 'ready' and not self.ready_files(existing)):
+                self.write(uid, sid, {**config, 'status': 'preparing', 'phase': 0})
+            return sid
         with self.lock:
             existing = self.read(uid, sid)
             if sid not in self.active and (not existing or existing['status'] != 'ready' or not self.ready_files(existing)):
@@ -184,6 +201,9 @@ class AudioService:
 
     def ready_files(self, value):
         music = self.directory / 'music' / value['music']
+        if self.file_store:
+            for path in [music.with_suffix('.m4a'), music.with_suffix('.mp3')] + [self.directory/'speech'/(key+'.mp3') for key in [s.get('speech','') for s in value['steps']]+[value.get('closing_speech','')]]:
+                self.file_store.load(path)
         return (music.with_suffix('.m4a').is_file() or music.with_suffix('.mp3').is_file()) and all(
             (self.directory / 'speech' / (key + '.mp3')).is_file() for key in
             [step.get('speech', '') for step in value['steps']] + [value.get('closing_speech', '')])
@@ -209,7 +229,10 @@ class AudioService:
         value = self.read(uid, sid)
         if value is None:
             abort(404, description='放松引导不存在')
-        if value['status'] == 'preparing' and sid not in self.active:
+        if self.file_store and value['status'] == 'preparing':
+            self._advance(uid, sid)
+            value = self.read(uid, sid)
+        if not self.file_store and value['status'] == 'preparing' and sid not in self.active:
             value.update(status='failed', error='音频准备已中断，请重新开始')
         base = '/api/relaxation/sessions/' + sid
         return {'session_id': sid, 'status': value['status'], 'error': value.get('error'),
@@ -217,9 +240,37 @@ class AudioService:
                 'steps': [{k: step[k] for k in ('title', 'text', 'duration_seconds')} | {'voice_url': base + '/voice/' + str(i)} for i, step in enumerate(value['steps'])],
                 'closing': {'text': value['closing_text'], 'voice_url': base + '/voice/' + str(len(value['steps']))}}
 
+    def _advance(self, uid, sid):
+        """Bounded resumable work inside a live request, never a detached cloud thread."""
+        with self.file_store.lease(self.directory/'sessions'/str(uid)/(sid+'.job')) as acquired:
+            if not acquired:
+                return
+            value = self.read(uid, sid)
+            if not value or value['status'] != 'preparing':
+                return
+            try:
+                phase = value.get('phase', 0)
+                if phase == 0:
+                    value['steps'] = self.translated_steps(value['steps'], value['source_language'], value['language'])
+                elif phase == 1:
+                    self.music(value['music'])
+                elif phase < len(value['steps']) + 2:
+                    step = value['steps'][phase-2]
+                    step['speech'] = self.speech(step['text'], value['voice'], value['language'])
+                else:
+                    value['closing_speech'] = self.speech(value['closing_text'], value['voice'], value['language'])
+                    value['status'] = 'ready'
+                value['phase'] = phase + 1
+            except AudioError as error:
+                value.update(status='failed', error=str(error))
+            except Exception:
+                value.update(status='failed', error='音频准备未完成，请稍后重试')
+            self.write(uid, sid, value)
+
 
 def register_audio_routes(app, db, login_required, user, profile_key):
     service = AudioService(Path(app.config['DATABASE']).parent / 'audio-library')
+    service.file_store = app.extensions.get('cloud_files')
     app.extensions['relaxation_audio'] = service
 
     @app.post('/api/relaxation/prepare')
@@ -259,6 +310,8 @@ def register_audio_routes(app, db, login_required, user, profile_key):
             abort(404, description='音频尚未准备好')
         if index is None:
             path = service.directory / 'music' / (value['music'] + '.m4a')
+            if service.file_store:
+                service.file_store.load(path)
             if not path.is_file():
                 path = path.with_suffix('.mp3')
         else:
@@ -266,6 +319,8 @@ def register_audio_routes(app, db, login_required, user, profile_key):
                 abort(404, description='音频不存在')
             key = value['closing_speech'] if index == len(value['steps']) else value['steps'][index]['speech']
             path = service.directory / 'speech' / (key + '.mp3')
+        if service.file_store:
+            service.file_store.load(path)
         if not path.is_file():
             abort(404, description='本地音频暂不可用，请联系管理者')
         return send_file(path, mimetype='audio/mp4' if path.suffix == '.m4a' else 'audio/mpeg', conditional=True)

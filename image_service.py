@@ -37,10 +37,14 @@ class ImageService:
         self.lock = threading.Lock()
         self.active = set()
         self.file_locks = {}
+        self.file_store = None
 
     def path(self, category, suffix):
         version = hashlib.sha256((self.model + ':warm-activity-v1' + (':'+self.gender if self.gender and category in PERSON_ACTIVITIES else '')).encode()).hexdigest()[:16]
-        return self.directory / f'{version}-{category}.{suffix}'
+        path = self.directory / f'{version}-{category}.{suffix}'
+        if self.file_store and suffix in ('image', 'json'):
+            self.file_store.load(path, refresh=suffix == 'json')
+        return path
 
     def _read(self, category):
         if self.path(category, 'image').exists():
@@ -58,14 +62,25 @@ class ImageService:
         temporary = path.with_suffix('.tmp')
         temporary.write_text(json.dumps(value))
         temporary.replace(path)
+        if self.file_store:
+            self.file_store.upload(path)
 
     def statuses(self, categories):
+        if self.file_store:
+            # One resumable item per request; no detached threads after response.
+            for category in categories:
+                value = self._read(category)
+                if value['status'] in ('queued', 'running'):
+                    with self.file_store.lease(self.path(category, 'lock')) as acquired:
+                        if acquired:
+                            self._generate(category, value.get('task_id'), value.get('remote_url'))
+                    break
         with self.lock:
             result = {}
             for category in categories:
                 value = self._read(category)
                 # A server restart must not leave a permanent spinner.
-                if value['status'] in ('queued', 'running') and category not in self.active and not self._externally_active(category):
+                if not self.file_store and value['status'] in ('queued', 'running') and category not in self.active and not self._externally_active(category):
                     value = {'status': 'failed', 'error': '配图生成中断，请点击重试。'}
                 result[category] = {k: v for k, v in value.items() if k in ('status', 'url', 'error')}
             return result
@@ -88,6 +103,9 @@ class ImageService:
                 if category in self.active or value['status'] == 'succeeded':
                     continue
                 if value['status'] == 'failed' and not retry:
+                    continue
+                if self.file_store:
+                    self._write(category, {'status': 'queued', 'task_id': value.get('task_id'), 'remote_url': value.get('remote_url')})
                     continue
                 handle = self.path(category, 'lock').open('a')
                 try:
@@ -194,6 +212,8 @@ class ImageService:
             temporary = self.path(category, 'part')
             temporary.write_bytes(content)
             temporary.replace(self.path(category, 'image'))
+            if self.file_store:
+                self.file_store.upload(self.path(category, 'image'))
             self._write(category, {'status': 'succeeded', 'task_id': task_id, 'remote_url': remote_url})
         except ImageError as error:
             self._write(category, {'status': 'failed', 'error': str(error), 'task_id': task_id, 'remote_url': remote_url})

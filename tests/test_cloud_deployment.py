@@ -94,3 +94,67 @@ def test_frontend_build_copies_only_static_assets(tmp_path):
     assert config['framework'] == 'flask'
     assert 'wsgi:app' in Path('pyproject.toml').read_text()
     assert 'instance' in Path('.vercelignore').read_text()
+
+
+def test_private_files_and_worker_leases_survive_cache_changes(tmp_path, monkeypatch):
+    assert cloud_database.decode({'type':'blob', 'base64':'eA'}) == b'x'
+    from cloud_files import FileStore
+    remote = tmp_path/'files.sqlite3'
+    monkeypatch.setattr(cloud_database.requests, 'Session', lambda: SQLiteTransport(remote))
+    first = FileStore(tmp_path/'first', 'https://test.turso.io', 'test-token')
+    second = FileStore(tmp_path/'second', 'https://test.turso.io', 'test-token')
+    path = first.root/'avatars'/'test.png'; path.parent.mkdir(parents=True); path.write_bytes(b'synthetic-image')
+    first.upload(path)
+    restored = second.load(second.root/'avatars'/'test.png')
+    assert restored.read_bytes() == b'synthetic-image'
+    with first.lease(first.root/'job.lock') as acquired:
+        assert acquired
+        with second.lease(second.root/'job.lock') as duplicate:
+            assert not duplicate
+    with second.lease(second.root/'job.lock') as acquired:
+        assert acquired
+    with pytest.raises(ValueError):
+        second.load(tmp_path/'outside-root')
+
+
+def test_cloud_audio_resumes_one_unit_per_request_without_background_threads(tmp_path, monkeypatch):
+    from audio_service import AudioService
+    from cloud_files import FileStore
+    from activity_catalog import DEFAULT_IDS
+    remote = tmp_path/'audio.sqlite3'
+    monkeypatch.setattr(cloud_database.requests, 'Session', lambda: SQLiteTransport(remote))
+    plan = [dict(activity_id=DEFAULT_IDS['rest'], category='rest', title='休息', description='坐一会儿。', duration_minutes=1)]
+    states = []
+    for phase in range(5):
+        root = tmp_path/('instance-'+str(phase))
+        service = AudioService(root/'audio-library')
+        service.file_store = FileStore(root, 'https://test.turso.io', 'test-token')
+        monkeypatch.setattr(service, 'translated_steps', lambda steps, source, target: steps)
+        monkeypatch.setattr(service, '_post_audio', lambda endpoint, body, path, **kwargs: path.write_bytes(b'ID3synthetic'))
+        monkeypatch.setattr(service.pool, 'submit', lambda *args, **kwargs: pytest.fail('Cloud work must run inside requests'))
+        sid = service.prepare(1, 7, plan, 1, 'female', 'zh', 'day')
+        state = service.public(1, sid); states.append(state['status'])
+    assert states == ['preparing', 'preparing', 'preparing', 'ready', 'ready']
+    assert service.ready_files(service.read(1, sid))
+
+
+def test_cloud_image_generation_does_not_submit_detached_work(tmp_path, monkeypatch):
+    from image_service import ImageService
+    from cloud_files import FileStore
+    from activity_catalog import DEFAULT_IDS
+    remote = tmp_path/'images.sqlite3'
+    monkeypatch.setattr(cloud_database.requests, 'Session', lambda: SQLiteTransport(remote))
+    service = ImageService(tmp_path/'cache'/'images')
+    service.file_store = FileStore(tmp_path/'cache', 'https://test.turso.io', 'test-token')
+    service.key = 'fake-test-key'
+    monkeypatch.setattr(service.pool, 'submit', lambda *args, **kwargs: pytest.fail('Detached worker submitted'))
+    def generate(category, *args):
+        service.path(category, 'image').write_bytes(b'synthetic-image')
+        service.file_store.upload(service.path(category, 'image'))
+        service._write(category, {'status':'succeeded'})
+    monkeypatch.setattr(service, '_generate', generate)
+    category = DEFAULT_IDS['rest']
+    assert service.start([category])[category]['status'] == 'succeeded'
+    other = ImageService(tmp_path/'different'/'images')
+    other.file_store = FileStore(tmp_path/'different', 'https://test.turso.io', 'test-token')
+    assert other.statuses([category])[category]['status'] == 'succeeded'

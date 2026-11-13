@@ -99,7 +99,19 @@ def create_app(test_config=None):
 
     if app.config['DATABASE_READY']:
         with app.app_context():
-            initialize_database()
+            # Cloud cold starts must not backfill every account or race ALTER TABLE.
+            if cloud_ready:
+                db().execute('CREATE TABLE IF NOT EXISTS app_schema_version(version INTEGER PRIMARY KEY)')
+            if not cloud_ready or not db().execute('SELECT version FROM app_schema_version WHERE version=1').fetchone():
+                initialize_database()
+                if cloud_ready:
+                    db().execute('INSERT OR IGNORE INTO app_schema_version(version) VALUES(1)')
+                    db().commit()
+    if cloud_ready:
+        from cloud_files import FileStore
+        app.extensions['cloud_files'] = FileStore(Path(app.config['DATABASE']).parent, app.config['TURSO_DATABASE_URL'], app.config['TURSO_AUTH_TOKEN'])
+        for service in image_services.values():
+            service.file_store = app.extensions['cloud_files']
 
     def data():
         body = request.get_json(silent=True)

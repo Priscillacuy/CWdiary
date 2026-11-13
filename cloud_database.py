@@ -38,7 +38,8 @@ def decode(value):
     if kind == 'null':
         return None
     if kind == 'blob':
-        return base64.b64decode(value['base64'])
+        encoded = value['base64']
+        return base64.b64decode(encoded + '=' * (-len(encoded) % 4))
     if kind == 'integer':
         return int(value['value'])
     return value['value']
