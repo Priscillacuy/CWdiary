@@ -133,6 +133,19 @@ class Connection:
             self.execute(statement)
         self.commit()
 
+    def execute_batch(self, statements):
+        """Run ordered statements in the current transaction, without committing."""
+        if not statements:
+            return []
+        operations = []
+        if not self.transaction:
+            operations.append(self._statement('BEGIN IMMEDIATE'))
+            self.transaction = True
+        offset = len(operations)
+        operations.extend(self._statement(sql, args) for sql, args in statements)
+        results = self._send(operations)
+        return [Cursor(result['result']) for result in results[offset:]]
+
     def commit(self):
         if self.transaction:
             self._send([self._statement('COMMIT')], close=True)
