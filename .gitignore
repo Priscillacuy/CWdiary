@@ -21,3 +21,5 @@ node_modules/
 .sites-runtime/
 .sites-checkout/
 *.tar.gz
+/public/
+/.vercel/

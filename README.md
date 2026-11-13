@@ -54,7 +54,18 @@ python3 -m venv .venv
 
 备份时先停止服务，再复制整个 `instance` 文件夹和本机 `.env`；不要将含私人日记或密钥的备份公开分享。
 
-默认仅监听 `127.0.0.1`，使用 Flask 本地开发服务；当前任务不包含公网部署。
+本地服务仅监听 `127.0.0.1`。线上部署见下文。
+
+## Vercel 自动部署
+
+生产地址：https://cwdiary-gray.vercel.app/ 。GitHub `main` 分支连接 Vercel 项目 `cwdiary`，推送后由 Vercel 构建前后端。
+
+- Framework Preset：Flask；Root Directory：仓库根目录；不要设置静态网站的 Output Directory。
+- `pyproject.toml` 指定 `wsgi:app`，构建时把 `static/` 复制到 `public/static/` 供 CDN 发布；首页、账号和业务 API 仍由同源 Flask 提供。
+- Production 环境需要 `SECRET_KEY`（稳定随机密钥）、`TURSO_DATABASE_URL` 和 `TURSO_AUTH_TOKEN`。Turso 使用独立云数据库，不会上传本机私人数据库。Preview 应使用独立测试数据库。
+- 未配置 Turso 时首页可访问，但账号/记录 API 返回503，不会将用户记录写入临时 SQLite 造成数据丢失。`/healthz` 返回当前数据库配置状态；未配置返回503。
+- `DEEPSEEK_API_KEY` 及相关地址/模型变量用于文字复盘。图片与语音仍涉及原有本地缓存/后台任务，尚需云端文件与任务持久化适配，不能只复制本机缓存并假定多实例可用；在完成验证前不要配置公开生成服务的密钥。
+- 云端不使用本机账号库。发布后用户需要单独注册；本机日记和账目不会自动迁移到公开部署。
 
 ## 验证
 

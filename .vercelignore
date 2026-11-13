@@ -1,0 +1,12 @@
+.git
+.venv
+.env
+.env.*
+instance
+docs
+design-qa.md
+.pytest_cache
+__pycache__
+tests
+deploy
+sites

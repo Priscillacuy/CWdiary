@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import sqlite3
+import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -32,8 +33,10 @@ AI_PROMPT += '\n每个活动额外返回 activity_id，必须从以下本地素�
 
 
 def create_app(test_config=None):
-    app = Flask(__name__)
-    Path(app.instance_path).mkdir(exist_ok=True)
+    cloud = os.getenv('VERCEL') == '1'
+    instance = Path(os.getenv('APP_INSTANCE_PATH') or (str(Path(tempfile.gettempdir()) / 'cwdiary') if cloud else str(ROOT / 'instance')))
+    app = Flask(__name__, instance_path=str(instance.resolve()))
+    instance.mkdir(parents=True, exist_ok=True)
     secret = os.getenv('SECRET_KEY')
     if not secret:
         secret_file = Path(app.instance_path) / '.session-secret'
@@ -41,11 +44,15 @@ def create_app(test_config=None):
             secret_file.write_text(secrets.token_hex(32))
             secret_file.chmod(0o600)
         secret = secret_file.read_text().strip()
-    app.config.update(SECRET_KEY=secret, DATABASE=str(ROOT / 'instance/diary.sqlite3'),
+    app.config.update(SECRET_KEY=secret, DATABASE=str(instance / 'diary.sqlite3'),
+                      TURSO_DATABASE_URL=os.getenv('TURSO_DATABASE_URL', ''), TURSO_AUTH_TOKEN=os.getenv('TURSO_AUTH_TOKEN', ''),
+                      SESSION_COOKIE_SECURE=cloud,
                       MAX_CONTENT_LENGTH=3 * 1024 * 1024, SESSION_COOKIE_HTTPONLY=True,
                       SESSION_COOKIE_SAMESITE='Strict', PERMANENT_SESSION_LIFETIME=timedelta(days=7))
     if test_config:
         app.config.update(test_config)
+    cloud_ready = bool(app.config['TURSO_DATABASE_URL'] and app.config['TURSO_AUTH_TOKEN'])
+    app.config['DATABASE_READY'] = not cloud or cloud_ready
     image_services = {gender: ImageService(Path(app.config['DATABASE']).parent / 'activity-images', gender=gender) for gender in ('neutral','male','female')}
     image_service = image_services['neutral']
     app.extensions['profile_images'] = image_services
@@ -53,7 +60,11 @@ def create_app(test_config=None):
 
     def db():
         if 'db' not in g:
-            g.db = sqlite3.connect(app.config['DATABASE'], timeout=10)
+            if app.config['TURSO_DATABASE_URL']:
+                from cloud_database import Connection
+                g.db = Connection(app.config['TURSO_DATABASE_URL'], app.config['TURSO_AUTH_TOKEN'])
+            else:
+                g.db = sqlite3.connect(app.config['DATABASE'], timeout=10)
             g.db.row_factory = sqlite3.Row
             g.db.execute('PRAGMA foreign_keys=ON')
         return g.db
@@ -63,7 +74,7 @@ def create_app(test_config=None):
         if 'db' in g:
             g.pop('db').close()
 
-    with app.app_context():
+    def initialize_database():
         db().executescript('''
         PRAGMA journal_mode=WAL;
         CREATE TABLE IF NOT EXISTS users (
@@ -85,6 +96,10 @@ def create_app(test_config=None):
             identity TEXT PRIMARY KEY, attempts INTEGER NOT NULL, until_at REAL NOT NULL);
         ''')
         migrate_accounts(db())
+
+    if app.config['DATABASE_READY']:
+        with app.app_context():
+            initialize_database()
 
     def data():
         body = request.get_json(silent=True)
@@ -116,6 +131,8 @@ def create_app(test_config=None):
 
     @app.before_request
     def csrf():
+        if request.path.startswith('/api/') and not app.config['DATABASE_READY']:
+            abort(503, description='云端数据库尚未配置，请联系管理者。')
         if session.get('uid'):
             account = db().execute('SELECT auth_version FROM users WHERE id=?',(session['uid'],)).fetchone()
             if not account or account['auth_version'] != session.get('auth_version',0):
@@ -143,6 +160,11 @@ def create_app(test_config=None):
     @app.get('/')
     def index():
         return render_template('index.html')
+
+    @app.get('/healthz')
+    def health():
+        ready = app.config['DATABASE_READY']
+        return jsonify(status='ok' if ready else 'configuration_required', database='turso' if cloud_ready else ('unconfigured' if cloud else 'sqlite')), 200 if ready else 503
 
     def user():
         row = db().execute('SELECT id, username, nickname, gender, language, avatar, currency FROM users WHERE id=?', (session.get('uid'),)).fetchone()
