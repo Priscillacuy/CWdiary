@@ -1,0 +1,23 @@
+.venv/
+.env
+instance/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.log
+.DS_Store
+.env.*
+!.env.example
+*.sqlite3*
+*.db
+*.pem
+*.key
+# Local QA material may contain personal diary/account screenshots.
+/docs/
+/design-qa.md
+/deploy/
+/sites/
+node_modules/
+.sites-runtime/
+.sites-checkout/
+*.tar.gz

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fffaf0"><meta name="description" content="暖隅日记，你的生活小角落。">
+  <title>暖隅日记</title><link rel="icon" type="image/png" href="/static/images/brand/favicon.png">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/peach-theme.css">
+  <link rel="stylesheet" href="/static/css/relaxation-player.css">
+  <link rel="stylesheet" href="/static/css/games.css">
+  <link rel="stylesheet" href="/static/css/ledger-calendar.css">
+  <script defer src="/static/vendor/feather.min.js"></script>
+  <script defer src="/static/vendor/opencc-cn2t.js"></script>
+  <script defer src="/static/js/i18n.js"></script>
+  <script defer src="/static/js/ledger-calendar.js"></script>
+  <script defer src="/static/js/account.js"></script>
+  <script defer src="/static/js/relaxation-clock.js"></script>
+  <script defer src="/static/js/relaxation-player.js"></script>
+  <script defer src="/static/js/2048-engine.js"></script>
+  <script defer src="/static/js/games.js"></script>
+  <script defer src="/static/js/app.js"></script>
+</head>
+<body class="session-loading">
+<div class="auth-welcome" aria-hidden="true"></div>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="暖隅日记首页"><img class="brand-logo" src="/static/images/brand/cw-mark.webp" alt=""><span>暖隅日记</span></a>
+  <nav aria-label="主导航">
+    <button class="nav-item" data-view="moods"><i data-feather="heart"></i><span>心情足迹</span></button>
+    <button class="nav-item active" data-view="diary"><i data-feather="book-open"></i><span>我的日记</span></button>
+    <button class="nav-item" data-view="ledger"><i data-feather="credit-card"></i><span>记账簿</span></button>
+    <button class="nav-item" data-view="games"><i data-feather="grid"></i><span>离线小游戏</span></button>
+    <button class="nav-item" data-view="profile"><i data-feather="user"></i><span>个人中心</span></button>
+  </nav>
+  <button class="profile-button" id="profile-open"><span class="avatar"><img src="/static/images/avatars/watercolor-cat.webp" alt=""></span><span id="profile-name" data-user-content>登录 / 注册</span><i data-feather="chevron-down"></i></button>
+</aside>
+<main>
+  <section class="hero">
+    <img class="hero-art" src="/static/images/hero.png" alt="窗边的小猫、花朵与日记本">
+    <div class="hero-copy"><p id="today"></p><h1>把今天，轻轻写下来</h1><button class="primary" id="write"><i data-feather="edit-3"></i>写日记</button></div>
+  </section>
+  <div id="diary-view" class="content-grid">
+    <section class="journal" aria-label="日记列表">
+      <form class="filters" id="filters">
+        <label class="search"><i data-feather="search"></i><input id="search" aria-label="搜索日记" placeholder="搜索日记" maxlength="100"></label>
+        <label><span class="filter-label">日期</span><select id="period" aria-label="日期范围"><option value="">全部</option><option value="7">近7天</option><option value="30">近30天</option></select></label>
+        <label><span class="filter-label">心情</span><select id="mood-filter" aria-label="心情筛选"><option value="">全部</option></select></label>
+        <label id="tag-filter-wrap" hidden><select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select></label>
+      </form>
+      <div id="date-selection" hidden><span></span><button class="text-button" id="clear-date">清除日期</button></div>
+      <div id="entries" aria-live="polite"></div>
+      <button id="load-more" class="secondary more" hidden>再看一些</button>
+    </section>
+    <aside class="right-panel">
+      <section class="weekly"><h2>本周心情趋势</h2><canvas id="mini-chart" height="180" role="img" aria-label="本周心情趋势"></canvas><p id="mini-empty" class="muted small" hidden>写下心情，慢慢看见变化</p></section>
+      <section class="calendar"><div class="calendar-header"><button class="icon-button" id="prev-month" aria-label="上个月"><i data-feather="chevron-left"></i></button><h2 id="calendar-title"></h2><button class="icon-button" id="next-month" aria-label="下个月"><i data-feather="chevron-right"></i></button></div><div class="calendar-grid" id="calendar"></div></section>
+    </aside>
+  </div>
+  <section id="moods-view" hidden>
+    <div class="section-heading"><h2>心情足迹</h2><select id="trend-range" aria-label="趋势范围"><option value="7">近7天</option><option value="30">近30天</option></select></div>
+    <canvas id="large-chart" height="280" role="img" aria-label="心情趋势"></canvas>
+    <div id="trend-description" class="muted small"></div>
+    <section class="period-review"><h2>这一段时光</h2><form id="period-review-form"><label>从<input type="date" id="review-start" required aria-label="复盘开始日期"></label><label>到<input type="date" id="review-end" required aria-label="复盘结束日期"></label><button class="primary" type="submit"><i data-feather="sparkles"></i>温柔复盘</button></form><div id="period-result"></div></section>
+  </section>
+  <section id="profile-view" class="settings-view peach-profile" hidden>
+    <div class="section-heading profile-heading"><div><h1>个人中心</h1><p class="eyebrow">让这里更像你</p></div><button type="button" class="secondary" id="logout">退出登录</button></div>
+    <section class="profile-identity" aria-label="头像管理"><img id="avatar-preview" class="avatar-preview" src="/static/images/avatars/watercolor-cat.webp" alt="当前头像"><div class="identity-copy"><h2 id="profile-display-name" data-user-content></h2><label class="secondary upload-label">上传头像<input id="avatar-upload" type="file" accept="image/png,image/jpeg,image/webp" hidden></label><p class="muted small">PNG、JPG 或 WebP，最大2MB</p></div></section>
+    <section class="avatar-selector" aria-label="动物头像选择"><h3>选择喜欢的小动物</h3><div id="animal-avatars" class="animal-avatars"></div><p id="avatar-status" class="form-status" role="status"></p></section>
+    <div class="profile-details-grid">
+      <section class="settings-card profile-details"><h2>个人资料</h2><form id="profile-form"><label>用户名<input id="profile-username" disabled></label><label>昵称<input id="profile-nickname" maxlength="24" required></label><label>性别<select id="profile-gender" aria-label="性别"><option value="">未设置</option><option value="male">男生</option><option value="female">女生</option></select></label><p class="muted small profile-explanation">人物参考图会匹配所选性别</p><label>界面语言<select id="profile-language" aria-label="界面语言"><option value="zh">简体中文</option><option value="zh-HK">繁體中文（中國香港）</option><option value="zh-TW">繁體中文（中國台灣）</option><option value="en">English</option></select></label><button class="primary" type="submit">保存资料</button><p id="profile-status" class="form-status" role="status"></p></form></section>
+      <section class="settings-card security-card"><h2>账号安全</h2><p class="muted security-note">更改密码后，其他设备需要重新登录。</p><form id="password-form"><label>旧密码<input name="old_password" type="password" autocomplete="current-password" maxlength="128" required></label><label>新密码<input name="new_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><label>确认新密码<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button class="secondary" type="submit">更改密码</button><p id="password-status" class="form-status" role="status"></p></form></section>
+    </div>
+    <section class="settings-card ledger-preferences"><h2>记账簿</h2><form id="ledger-preferences-form"><label>交易货币<select id="profile-currency" aria-label="交易货币"><option value="CNY">人民币 RMB</option><option value="HKD">港币 HKD</option><option value="TWD">新台币 NTD</option><option value="GBP">英镑 GBP</option><option value="USD">美元 USD</option></select></label><p class="muted small">切换后按所选货币记账和统计，已有账目保留原币种，不作汇率换算。</p><button class="primary" type="submit">保存交易货币</button><p id="currency-status" class="form-status" role="status"></p></form></section>
+  </section>
+  <section id="ledger-view" class="settings-view" hidden>
+    <div class="section-heading"><div><p class="eyebrow">把日常收支，也轻轻记下</p><h1>记账簿</h1></div><div class="ledger-date-filter"><span>日期</span><div class="warm-date-field"><input id="ledger-date" type="hidden"><button type="button" class="warm-date-trigger" data-date-input="ledger-date" aria-label="记账日期" aria-haspopup="dialog" aria-expanded="false"></button></div></div></div>
+    <div class="ledger-totals"><section><span>当日支出</span><strong id="ledger-expense">¥0.00</strong></section></div>
+    <p class="ledger-currency-caption"><span>当前交易货币</span> <strong id="ledger-currency-name" data-user-content></strong><small>仅显示与统计此币种账目，可在个人中心切换。</small></p>
+    <details id="ledger-reports" class="ledger-reports"><summary><span><img class="ledger-reports-logo" src="/static/images/brand/cw-mark.webp" alt=""><span>收支明细</span></span><span class="ledger-reports-action"><span class="when-closed">点击显示</span><span class="when-open">点击收起</span><i data-feather="chevron-down"></i></span></summary><div class="ledger-reports-body"><p class="muted small">按上方日期所在的月份和年份统计。</p><div id="ledger-report-content" aria-live="polite"></div></div></details>
+    <section class="settings-card"><h2 id="ledger-form-title">记一笔</h2><form id="ledger-form" class="ledger-form"><label>类型<select name="kind"><option value="expense">支出</option><option value="income">收入</option></select></label><label><span id="ledger-amount-label">金额（RMB）</span><input name="amount" type="number" min="0.01" max="99999999.99" step="0.01" required></label><div class="ledger-form-date"><span>日期</span><div class="warm-date-field"><input id="ledger-entry-date" name="entry_date" type="hidden"><button type="button" class="warm-date-trigger" data-date-input="ledger-entry-date" aria-label="账目日期" aria-haspopup="dialog" aria-expanded="false"></button></div></div><div class="ledger-category"><label for="ledger-category-input">分类</label><input id="ledger-category-input" name="category" maxlength="24" placeholder="选择常用分类，也可以自己填写" required><div class="ledger-category-options" role="group" aria-label="常用分类"><button type="button" class="ledger-category-chip" data-ledger-category="餐饮" aria-pressed="false">餐饮</button><button type="button" class="ledger-category-chip" data-ledger-category="交通" aria-pressed="false">交通</button><button type="button" class="ledger-category-chip" data-ledger-category="零食" aria-pressed="false">零食</button><button type="button" class="ledger-category-chip" data-ledger-category="网购" aria-pressed="false">网购</button><button type="button" class="ledger-category-chip" data-ledger-category="日用品" aria-pressed="false">日用品</button><button type="button" class="ledger-category-chip" data-ledger-category="娱乐" aria-pressed="false">娱乐</button></div></div><label class="ledger-note">备注<input name="note" maxlength="200" placeholder="想补充的小事（可选）"></label><div class="ledger-form-actions"><button class="primary" type="submit">保存账目</button><button class="text-button" type="button" id="ledger-cancel" hidden>取消编辑</button><p id="ledger-status" class="form-status" role="status"></p></div></form></section>
+    <section class="settings-card ledger-list"><h2>收支记录</h2><div id="ledger-items"></div></section>
+  </section>
+  <section id="games-view" class="settings-view" hidden>
+    <div class="section-heading"><div><p class="eyebrow">给大脑放个小假</p><h1>离线小游戏</h1></div></div>
+    <p class="games-intro">选一款轻松玩一会儿，游戏在本地运行，按自己的节奏就好。</p>
+    <div class="game-picker" aria-label="选择小游戏">
+      <button type="button" data-game="memory" aria-pressed="false"><i data-feather="copy"></i><span><strong>记忆翻牌</strong><small>找到相同的动物头像</small></span></button>
+      <button type="button" data-game="tictac" aria-pressed="false"><i data-feather="hash"></i><span><strong>井字棋</strong><small>和电脑轻松下一局</small></span></button>
+      <button type="button" data-game="puzzle" aria-pressed="false"><i data-feather="grid"></i><span><strong>2048 数字合成</strong><small>滑动合并，挑战更大的数字</small></span></button>
+    </div>
+    <section class="game-panel" id="memory-panel" hidden><div class="game-panel-heading"><div><h2>记忆翻牌</h2><p>每次翻开两张牌，找到猫咪、小狗、兔子、狐狸、熊猫和小熊的相同头像。</p></div><button type="button" class="secondary" id="memory-reset">重新开始</button></div><p class="game-status" id="memory-status" role="status"></p><div id="memory-board" class="memory-board" role="group" aria-label="记忆翻牌棋盘"></div></section>
+    <section class="game-panel" id="tictac-panel" hidden><div class="game-panel-heading"><div><h2>井字棋</h2><p>你先手画叉，电脑画圈，三个连成一线就获胜。</p></div><button type="button" class="secondary" id="tictac-reset">再来一局</button></div><p class="game-status" id="tictac-status" role="status"></p><div id="tictac-board" class="tictac-board" role="group" aria-label="井字棋棋盘"></div></section>
+    <section class="game-panel" id="puzzle-panel" hidden><div class="game-panel-heading"><div><h2>2048 数字合成</h2><p>用方向键、滑动棋盘或下方按钮移动，相同数字相遇就会合并。</p></div><button type="button" class="secondary" id="puzzle-reset">新的一局</button></div><div class="puzzle-toolbar"><span>得分 <strong id="puzzle-score">0</strong></span><button type="button" class="text-button" id="puzzle-undo" disabled>撤销一步</button><button type="button" class="secondary" id="puzzle-continue" hidden>继续挑战</button></div><p class="game-status" id="puzzle-status" role="status"></p><div class="puzzle-play-area"><div id="puzzle-board" class="puzzle-board" tabindex="0" role="group" aria-label="2048 棋盘"></div><div class="puzzle-directions" role="group" aria-label="移动方向"><button type="button" data-direction="left" aria-label="向左">左</button><button type="button" data-direction="up" aria-label="向上">上</button><button type="button" data-direction="down" aria-label="向下">下</button><button type="button" data-direction="right" aria-label="向右">右</button></div></div></section>
+  </section>
+  <footer>仅供生活参考，不替代医生、心理咨询师或营养师的专业意见。</footer>
+</main>
+<dialog id="auth-dialog">
+  <button class="icon-button close" id="auth-close" data-close="auth-dialog" aria-label="关闭"><i data-feather="x"></i></button>
+  <label class="auth-language"><span>语言</span><select id="auth-language"><option value="zh">简体中文</option><option value="zh-HK">繁體中文（中國香港）</option><option value="zh-TW">繁體中文（中國台灣）</option><option value="en">English</option></select></label><div class="auth-intro"><div class="auth-brand"><img src="/static/images/brand/cw-mark.webp" alt=""><span>暖隅日记</span></div><h1>留一个角落，给自己</h1><p>记录生活，也慢慢照顾自己。</p></div><div class="dialog-heading"><h2 id="auth-title">回到你的小角落</h2></div>
+  <form id="auth-form"><label>用户名<input name="username" autocomplete="username" minlength="3" maxlength="32" required></label><label>密码<input type="password" name="password" autocomplete="current-password" minlength="8" maxlength="128" required></label><label id="auth-confirm-wrap" hidden>确认密码<input type="password" name="confirm_password" autocomplete="new-password" minlength="8" maxlength="128"></label><p id="auth-error" class="error" role="alert"></p><button class="primary full" id="auth-submit">登录</button></form>
+  <button class="text-button full" id="auth-switch">还没有账号？注册</button>
+</dialog>
+<dialog id="editor-dialog" class="editor-dialog">
+  <header class="editor-header"><span id="editor-heading">今天的一页</span><button class="icon-button" id="editor-close" aria-label="关闭日记"><i data-feather="x"></i></button></header>
+  <p id="editor-status" class="editor-status" role="status" aria-live="polite" hidden></p>
+  <form id="entry-form">
+    <div class="editor-meta"><input id="entry-date" type="date" aria-label="日记日期" required><span id="word-count" class="muted small">0 字</span></div>
+    <input id="entry-title" class="title-input" aria-label="日记标题" placeholder="给今天起个名字（可选）" maxlength="100">
+    <div class="mood-picker" id="mood-picker" role="group" aria-label="今天的心情"></div>
+    <textarea id="entry-content" aria-label="日记内容" placeholder="今天，有什么想记住的？" maxlength="15000" required></textarea>
+    <label class="tag-input"><i data-feather="tag"></i><input id="entry-tags" aria-label="日记标签" placeholder="标签，以逗号分隔" maxlength="64"></label>
+    <div class="editor-actions"><button type="button" class="text-button danger" id="delete-entry" hidden>删除日记</button><span id="save-state" class="muted small" role="status"></span><button type="button" class="secondary" id="analyze-entry"><i data-feather="feather"></i>保存并复盘</button><button type="submit" class="primary" id="save-entry"><i data-feather="check"></i>保存日记</button></div>
+  </form>
+  <div id="entry-result" class="entry-result"></div>
+</dialog>
+<dialog id="confirm-dialog"><h2 id="confirm-title"></h2><p id="confirm-message"></p><div class="confirm-actions"><button class="secondary" id="confirm-cancel">取消</button><button class="primary" id="confirm-ok">继续</button></div></dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+</body></html>

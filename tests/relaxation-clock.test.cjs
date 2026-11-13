@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+const Clock = require('../static/js/relaxation-clock.js');
+let now=0;
+const c=new Clock([300,600,120],()=>now);
+assert.equal(c.start().remaining,300);
+now=300000;assert.equal(c.snapshot().index,1);assert.equal(c.snapshot().remaining,600);
+now=420000;c.pause();now=900000;assert.equal(c.snapshot().remaining,480);
+c.resume();now=960000;assert.equal(c.snapshot().remaining,420);
+c.skip();assert.equal(c.snapshot().index,2);assert.equal(c.snapshot().remaining,120);
+now=1080000;assert.equal(c.snapshot().phase,'finished');assert.equal(c.snapshot().totalRemaining,0);
+assert.equal(c.snapshot().phase,'finished');assert.equal(c.stop().phase,'idle');
+const background=new Clock([60,60,60],()=>now);background.start();now+=125000;
+assert.equal(background.snapshot().index,2);assert.equal(background.snapshot().remaining,55);
+now+=60000;assert.equal(background.snapshot().phase,'finished');
+assert.throws(()=>new Clock([0]));
+console.log('Clock checks passed: boundaries, pause/resume, skip, background delay, completion and stop.');

@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="{{ 'en' if language=='en' else 'zh-CN' }}" data-language="{{ language }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>舒缓素材库 · 暖隅日记</title><link rel="stylesheet" href="/static/css/library.css"><link rel="stylesheet" href="/static/css/peach-theme.css"><script defer src="/static/vendor/opencc-cn2t.js"></script><script defer src="/static/js/i18n.js"></script></head>
+<body>
+<header><a href="/">← 回到日记</a><p class="eyebrow">给生活留一点柔软</p><h1>50 件舒缓心情的小事</h1><p>按当下精力、需要与喜好选择。没有完成要求，也可以什么都不做。</p><span class="count">当前适用配图 {{ ready }} / 50 · AI 生成活动参考图</span><p>人物参考图会在复盘时按你填写的性别生成，不显示其他性别的人物图。</p></header>
+<main>{% for activity in activities %}<article>{% if activity.ready %}<img src="/api/activity-images/{{ activity.id }}/file?profile={{ profile }}" alt="{{ activity.name_en ~ ' reference image' if language=='en' else activity.name ~ '参考图' }}" loading="lazy">{% else %}<div class="pending">参考图准备中</div>{% endif %}<div class="copy"><small>{{ '%02d' % loop.index }} · 建议 {{ activity.duration_minutes }} 分钟</small><h2>{{ activity.name }}</h2><p class="suitable">{{ activity.suitable_for }}</p><p>{{ activity.instructions }}</p></div></article>{% endfor %}</main>
+<footer>温和的生活建议，按身体感受调整；不适时停止。</footer>
+</body></html>
