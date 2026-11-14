@@ -65,16 +65,17 @@ class ImageService:
         if self.file_store:
             self.file_store.upload(path)
 
-    def statuses(self, categories):
-        if self.file_store:
-            # One resumable item per request; no detached threads after response.
-            for category in categories:
+    def statuses(self, categories, advance=True):
+        if self.file_store and advance:
+            # Submit/poll independent images together, then join before returning.
+            def advance_image(category):
                 value = self._read(category)
                 if value['status'] in ('queued', 'running'):
                     with self.file_store.lease(self.path(category, 'lock')) as acquired:
                         if acquired:
                             self._generate(category, value.get('task_id'), value.get('remote_url'))
-                    break
+            with ThreadPoolExecutor(max_workers=4) as workers:
+                list(workers.map(advance_image, categories))
         with self.lock:
             result = {}
             for category in categories:
@@ -117,7 +118,7 @@ class ImageService:
                 self.active.add(category)
                 self._write(category, {'status': 'queued', 'task_id': value.get('task_id'), 'remote_url': value.get('remote_url')})
                 self.pool.submit(self._generate, category, value.get('task_id'), value.get('remote_url'))
-        return self.statuses(categories)
+        return self.statuses(categories, advance=False)
 
     @staticmethod
     def _check_response(response):
@@ -196,13 +197,17 @@ class ImageService:
                 self._write(category, {'status': 'running', 'task_id': task_id})
                 if time.monotonic() >= deadline:
                     raise ImageError('配图仍未生成完成，请稍后点击重试查询。')
-                time.sleep(4)
+                if not self.file_store:
+                    time.sleep(4)
                 response = requests.get(self.base + '/v1/api/result', headers=headers,
                                         params={'id': task_id}, timeout=(10, 60))
                 if response.status_code == 404:
                     task_id = None
                     raise ImageError('图片任务已过期，请点击重试重新生成。')
                 value = self._check_response(response)
+                if self.file_store and value.get('status') not in ('succeeded', 'failed', 'error', 'cancelled'):
+                    self._write(category, {'status': 'running', 'task_id': task_id})
+                    return
             results = value.get('results')
             if not isinstance(results, list) or not results or not isinstance(results[0], dict):
                 raise ImageError('图片服务没有返回图片。')

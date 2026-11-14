@@ -70,7 +70,7 @@ def session_steps(plan, minutes, language):
 class AudioService:
     def __init__(self, directory):
         self.directory = Path(directory)
-        for name in ('music', 'speech', 'sessions'):
+        for name in ('music', 'speech', 'sessions', 'scripts'):
             (self.directory / name).mkdir(parents=True, exist_ok=True)
         self.key = os.getenv('ELEVENLABS_API_KEY', '')
         self.model = os.getenv('ELEVENLABS_MODEL', 'eleven_v4_turbo')
@@ -129,6 +129,21 @@ class AudioService:
         return version
 
     def translated_steps(self, steps, source_language, language):
+        # Reuse the spoken script across sessions, voices and duration changes.
+        texts = [{key: step[key] for key in ('title', 'description')} for step in steps]
+        version = hashlib.sha256(json.dumps([texts, language, os.getenv('DEEPSEEK_MODEL', 'deepseek-flash'), 'spoken-v3'], sort_keys=True).encode()).hexdigest()
+        path = self.directory / 'scripts' / (version + '.json')
+        def produce():
+            translated = self._translate_steps(steps, source_language, language)
+            path.write_text(json.dumps([{key: s[key] for key in ('title', 'description')} for s in translated], ensure_ascii=False))
+        self._cached(path, produce)
+        texts = json.loads(path.read_text())
+        result = [{**step, **text} for step, text in zip(steps, texts)]
+        for item in result:
+            item['text'] = guidance(item, language)
+        return result
+
+    def _translate_steps(self, steps, source_language, language):
         """Rewrite recommendation copy for speech in every language; keep IDs and durations local."""
         texts = [{key: step[key] for key in ('title', 'description')} for step in steps]
         key = os.getenv('DEEPSEEK_API_KEY', '')
@@ -211,10 +226,7 @@ class AudioService:
     def _build(self, uid, sid, value):
         try:
             value['steps'] = self.translated_steps(value['steps'], value['source_language'], value['language'])
-            self.music(value['music'])
-            for step in value['steps']:
-                step['speech'] = self.speech(step['text'], value['voice'], value['language'])
-            value['closing_speech'] = self.speech(value['closing_text'], value['voice'], value['language'])
+            self._complete_media(value)
             value['status'] = 'ready'
         except AudioError as error:
             value.update(status='failed', error=str(error))
@@ -224,6 +236,17 @@ class AudioService:
             self.write(uid, sid, value)
             with self.lock:
                 self.active.discard(sid)
+
+    def _complete_media(self, value):
+        # All work is joined inside the request/worker; no abandoned cloud jobs.
+        with ThreadPoolExecutor(max_workers=4) as workers:
+            music = workers.submit(self.music, value['music'])
+            voices = [workers.submit(self.speech, step['text'], value['voice'], value['language']) for step in value['steps']]
+            ending = workers.submit(self.speech, value['closing_text'], value['voice'], value['language'])
+            for step, future in zip(value['steps'], voices):
+                step['speech'] = future.result()
+            value['closing_speech'] = ending.result()
+            music.result()
 
     def public(self, uid, sid):
         value = self.read(uid, sid)
@@ -252,13 +275,8 @@ class AudioService:
                 phase = value.get('phase', 0)
                 if phase == 0:
                     value['steps'] = self.translated_steps(value['steps'], value['source_language'], value['language'])
-                elif phase == 1:
-                    self.music(value['music'])
-                elif phase < len(value['steps']) + 2:
-                    step = value['steps'][phase-2]
-                    step['speech'] = self.speech(step['text'], value['voice'], value['language'])
                 else:
-                    value['closing_speech'] = self.speech(value['closing_text'], value['voice'], value['language'])
+                    self._complete_media(value)
                     value['status'] = 'ready'
                 value['phase'] = phase + 1
             except AudioError as error:

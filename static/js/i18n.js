@@ -84,6 +84,7 @@ Object.assign(dictionary,{
  '朗读翻译未完成，请稍后重试':'Narration translation did not finish. Please retry.',
  '仅本次活动文案交给 DeepSeek 改写成口语，再由 ElevenLabs 配音，不发送日记原文。':'Only these activity instructions go to DeepSeek for a conversational script, then to ElevenLabs for narration. Your original diary is not sent.'
 });
+Object.assign(dictionary,{'累计通关':'Completed games','每一次进步，都值得庆祝':'Every step forward deserves a celebration','不要气馁，继续努力！再来一局吧。':'Keep going! You can do it. Try another round.','继续努力！不要气馁，试试撤销或新的一局。':'Keep going! Try undoing a move or starting a new game.'});
 const locales={zh:'zh-CN','zh-HK':'zh-HK','zh-TW':'zh-TW',en:'en-US'};
 const converters={'zh-HK':OpenCC.Converter({from:'cn',to:'hk'}),'zh-TW':OpenCC.Converter({from:'cn',to:'twp'})};
 const regional={

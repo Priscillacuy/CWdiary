@@ -117,7 +117,7 @@ def test_private_files_and_worker_leases_survive_cache_changes(tmp_path, monkeyp
         second.load(tmp_path/'outside-root')
 
 
-def test_cloud_audio_resumes_one_unit_per_request_without_background_threads(tmp_path, monkeypatch):
+def test_cloud_audio_resumes_translation_then_parallel_media_without_detached_threads(tmp_path, monkeypatch):
     from audio_service import AudioService
     from cloud_files import FileStore
     from activity_catalog import DEFAULT_IDS
@@ -134,7 +134,7 @@ def test_cloud_audio_resumes_one_unit_per_request_without_background_threads(tmp
         monkeypatch.setattr(service.pool, 'submit', lambda *args, **kwargs: pytest.fail('Cloud work must run inside requests'))
         sid = service.prepare(1, 7, plan, 1, 'female', 'zh', 'day')
         state = service.public(1, sid); states.append(state['status'])
-    assert states == ['preparing', 'preparing', 'preparing', 'ready', 'ready']
+    assert states == ['preparing', 'ready', 'ready', 'ready', 'ready']
     assert service.ready_files(service.read(1, sid))
 
 
@@ -154,7 +154,8 @@ def test_cloud_image_generation_does_not_submit_detached_work(tmp_path, monkeypa
         service._write(category, {'status':'succeeded'})
     monkeypatch.setattr(service, '_generate', generate)
     category = DEFAULT_IDS['rest']
-    assert service.start([category])[category]['status'] == 'succeeded'
+    assert service.start([category])[category]['status'] == 'queued'
+    assert service.statuses([category])[category]['status'] == 'succeeded'
     other = ImageService(tmp_path/'different'/'images')
     other.file_store = FileStore(tmp_path/'different', 'https://test.turso.io', 'test-token')
     assert other.statuses([category])[category]['status'] == 'succeeded'
