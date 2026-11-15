@@ -22,11 +22,12 @@
     return {board:next,score,transitions,merged,changed:next.some((value,i)=>value!==board[i])};
   }
   function canMove(board){return board.some(value=>!value)||['left','up'].some(direction=>move(board,direction).changed);}
-  function milestones(score,claimed=[]){return [...Array.from({length:Math.floor(score/1000)},(_,i)=>(i+1)*1000),2048].filter(n=>n<=score&&!claimed.includes(n)).sort((a,b)=>a-b);}
+  function milestones(score,claimed=[]){return [1000,2048,...Array.from({length:Math.floor(score/3000)},(_,i)=>(i+1)*3000)].filter(n=>n<=score&&!claimed.includes(n)).sort((a,b)=>a-b);}
+  function celebrationFor(mark){return (mark===1000?0:mark===2048?1:Math.floor(mark/3000)+1)%2===0?'confetti':'fireworks';}
   function validSave(record){
     const board=b=>Array.isArray(b)&&b.length===16&&b.every(n=>n===0||Number.isInteger(n)&&n>=2&&n<=1073741824&&Math.log2(n)%1===0);
     const state=s=>s&&board(s.numbers)&&Number.isSafeInteger(s.score)&&s.score>=0&&typeof s.keepPlaying==='boolean';
     return Boolean(record&&record.version===1&&state(record)&&typeof record.roundId==='string'&&record.roundId.length>0&&record.roundId.length<100&&typeof record.completed==='boolean'&&Array.isArray(record.milestones)&&record.milestones.every(n=>Number.isSafeInteger(n)&&n>0&&(n%1000===0||n===2048))&&(!record.undo||state(record.undo)));
   }
-  const engine={slideLine,move,canMove,milestones,validSave};root.Puzzle2048=engine;if(typeof module!=='undefined')module.exports=engine;
+  const engine={slideLine,move,canMove,milestones,celebrationFor,validSave};root.Puzzle2048=engine;if(typeof module!=='undefined')module.exports=engine;
 })(typeof window!=='undefined'?window:globalThis);

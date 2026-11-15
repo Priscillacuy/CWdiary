@@ -21,20 +21,24 @@ window.GameRoom=(()=>{
       card.replaceChildren();const title=document.createElement('span');title.textContent=t('累计通关');const count=document.createElement('strong');count.textContent=String(Number.isSafeInteger(wins[game])&&wins[game]>0?wins[game]:0);const note=document.createElement('small');note.textContent=t('每一次进步，都值得庆祝');card.append(title,count,note);
     }
   }
-  function celebrate(){
+  function celebrate(kind='confetti',large=false){
     if(celebration){clearInterval(celebration.interval);clearTimeout(celebration.timer);celebration.canvas.remove();}
-    const canvas=document.createElement('canvas');canvas.className='game-confetti';canvas.setAttribute('aria-hidden','true');document.body.append(canvas);
+    const canvas=document.createElement('canvas');canvas.className='game-confetti';canvas.dataset.effect=kind;canvas.dataset.large=String(large);canvas.setAttribute('aria-hidden','true');document.body.append(canvas);
     const burst=window.confetti.create(canvas,{resize:true,disableForReducedMotion:true});
-    const fire=()=>{for(const x of [.12,.88])burst({particleCount:32,spread:75,startVelocity:38,gravity:.85,ticks:90,origin:{x,y:.65},colors:['#dba45f','#99af7d','#e7c465','#d58d78','#fff2cc']});};
+    const fire=()=>{
+      if(kind==='fireworks'){
+        for(const origin of (large?[{x:.25,y:.3},{x:.5,y:.2},{x:.75,y:.35}]:[{x:.3,y:.35},{x:.7,y:.3}]))burst({particleCount:large?95:50,spread:360,startVelocity:large?52:30,gravity:.55,ticks:large?125:95,scalar:large?1.25:1,shapes:['circle'],origin,colors:['#ffd46b','#ff9678','#b9d596','#c0b5ec','#fff4c9']});
+      }else for(const x of [.12,.88])burst({particleCount:32,spread:75,startVelocity:38,gravity:.85,ticks:90,origin:{x,y:.65},colors:['#dba45f','#99af7d','#e7c465','#d58d78','#fff2cc']});
+    };
     fire();const current={canvas,interval:setInterval(fire,450)};current.timer=setTimeout(()=>{clearInterval(current.interval);burst.reset();canvas.remove();if(celebration===current)celebration=null;},3600);celebration=current;
   }
-  function complete(game){
+  function complete(game,kind='confetti',large=false){
     if(awarded.has(game))return;awarded.add(game);
     if(game==='sudoku'){const key=sudoku.puzzle.join('');if(Array.isArray(wins.sudokuRounds)&&wins.sudokuRounds.includes(key))return;wins.sudokuRounds=[...(Array.isArray(wins.sudokuRounds)?wins.sudokuRounds:[]),key].slice(-100);}
     if(game==='puzzle'){if(Array.isArray(wins.puzzleRounds)&&wins.puzzleRounds.includes(puzzleRound))return;wins.puzzleRounds=[...(Array.isArray(wins.puzzleRounds)?wins.puzzleRounds:[]),puzzleRound].slice(-100);}
     wins[game]=(Number.isSafeInteger(wins[game])&&wins[game]>0?wins[game]:0)+1;
     if(account)try{localStorage.setItem('cwdiary-game-wins:'+account,JSON.stringify(wins));}catch{}
-    renderWins();celebrate();
+    renderWins();celebrate(kind,large);
   }
   function resetMemory(){awarded.delete('memory');clearTimeout(mismatch);mismatch=null;deck=[0,1,2,3,4,5,0,1,2,3,4,5];for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}flipped=[];matched=new Set();turns=0;renderMemory();}
   function renderMemory(){
@@ -117,9 +121,9 @@ window.GameRoom=(()=>{
     if(puzzleAnimating){queuedDirection=direction;return;}
     if(puzzleBlocked())return;const result=Puzzle2048.move(numbers,direction);if(!result.changed)return;
     undo={numbers:numbers.slice(),score,keepPlaying};numbers=result.board;score+=result.score;const beforeSpawn=numbers.slice();addNumber();const spawn=numbers.findIndex((v,i)=>v!==beforeSpawn[i]);
-    let milestone=false;for(const mark of Puzzle2048.milestones(score,[...scoreCelebrations])){scoreCelebrations.add(mark);milestone=true;}
+    const milestones=Puzzle2048.milestones(score,[...scoreCelebrations]);milestones.forEach(mark=>scoreCelebrations.add(mark));const made2048=result.merged.some(i=>result.board[i]===2048);
     const newWin=numbers.some(value=>value>=2048)&&!awarded.has('puzzle');
-    if(newWin)complete('puzzle');else if(milestone)celebrate();
+    if(newWin)complete('puzzle','fireworks',true);else if(made2048)celebrate('fireworks',true);else if(milestones.length)celebrate(Puzzle2048.celebrationFor(milestones.at(-1)));
     puzzleAnimating=true;const serial=++puzzleMotionSerial;$('#puzzle-undo').disabled=true;$('#puzzle-save').disabled=true;
     await slidePuzzle(result);if(serial!==puzzleMotionSerial)return;
     puzzleAnimating=false;renderPuzzle(undefined,result.merged,spawn);const next=queuedDirection;queuedDirection=null;if(next)movePuzzle(next);

@@ -8,7 +8,7 @@ for(let i=0;i<100;i++){
 }
 assert.deepEqual([...puzzle.milestones(999)],[]);
 assert.deepEqual([...puzzle.milestones(1000)],[1000]);
-assert.deepEqual([...puzzle.milestones(2000,[1000])],[2000]);
+assert.deepEqual([...puzzle.milestones(2000,[1000])],[]);
 assert.deepEqual([...puzzle.milestones(2048,[1000,2000])],[2048]);
 assert.deepEqual([...puzzle.milestones(3000,[1000,2000,2048])],[3000]);
 assert.deepEqual([...puzzle.milestones(1000,[1000,2000,2048])],[]); // Undo must not reward twice.
@@ -38,3 +38,9 @@ for(let i=0;i<100;i++){
 const record={version:1,numbers:[2,4,...Array(14).fill(0)],score:4,keepPlaying:false,roundId:'test-round',completed:false,milestones:[],undo:null};
 assert(puzzle.validSave(record));assert(!puzzle.validSave({...record,numbers:Array(16).fill(3)}));assert(!puzzle.validSave({...record,score:-1}));assert(!puzzle.validSave({...record,undo:{numbers:[]}}));
 console.log('400 tile-motion mappings and 2048 saved progress validated');
+
+assert.deepEqual([...puzzle.milestones(15000)],[1000,2048,3000,6000,9000,12000,15000]);
+assert.deepEqual([...puzzle.milestones(8999,[1000,2048,3000,6000])],[]);
+assert.deepEqual([...puzzle.milestones(9000,[1000,2048,3000,6000])],[9000]);
+assert.deepEqual([1000,2048,3000,6000,9000,12000].map(puzzle.celebrationFor),['confetti','fireworks','confetti','fireworks','confetti','fireworks']);
+console.log('3000-point intervals and alternating effects passed');
