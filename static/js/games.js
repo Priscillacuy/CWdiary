@@ -12,7 +12,7 @@ window.GameRoom=(()=>{
   function setUser(id){
     const next=id==null?'':String(id);if(account===next)return;account=next;
     try{wins=JSON.parse(localStorage.getItem('cwdiary-game-wins:'+account)||'{}')||{};}catch{wins={};}
-    if(ready){resetMemory();resetSudoku();resetPuzzle();renderWins();}
+    if(ready){resetMemory();resetSudoku();restoreSudoku();resetPuzzle();renderWins();}
   }
   function renderWins(){
     for(const game of ['memory','sudoku','puzzle']){
@@ -30,6 +30,7 @@ window.GameRoom=(()=>{
   }
   function complete(game){
     if(awarded.has(game))return;awarded.add(game);
+    if(game==='sudoku'){const key=sudoku.puzzle.join('');if(Array.isArray(wins.sudokuRounds)&&wins.sudokuRounds.includes(key))return;wins.sudokuRounds=[...(Array.isArray(wins.sudokuRounds)?wins.sudokuRounds:[]),key].slice(-100);}
     wins[game]=(Number.isSafeInteger(wins[game])&&wins[game]>0?wins[game]:0)+1;
     if(account)try{localStorage.setItem('cwdiary-game-wins:'+account,JSON.stringify(wins));}catch{}
     renderWins();celebrate();
@@ -47,6 +48,22 @@ window.GameRoom=(()=>{
   function resetLabel(game,result){$('#'+game+'-reset').textContent=t(result==='won'?'开启新一局':result==='lost'?'再来一局':'重新开始');}
   function resetSudoku(){
     awarded.delete('sudoku');sudokuMarks.clear();sudoku=SudokuEngine.generate();sudokuCells=sudoku.puzzle.slice();sudokuSelected=sudokuCells.indexOf(0);sudokuError=-1;renderSudoku();
+  }
+  function saveSudoku(){
+    try{
+      if(!account)throw Error();
+      localStorage.setItem('cwdiary-sudoku-save:'+account,JSON.stringify({version:1,puzzle:sudoku.puzzle,solution:sudoku.solution,cells:sudokuCells,marks:[...sudokuMarks],selected:sudokuSelected}));
+      renderSudoku('进度已保存，下次进入将继续这一局。');
+    }catch{renderSudoku('保存未完成，请检查浏览器储存空间后重试。');}
+  }
+  function restoreSudoku(){
+    if(!account)return;
+    try{
+      const record=JSON.parse(localStorage.getItem('cwdiary-sudoku-save:'+account)||'null');if(!SudokuEngine.validSave(record))return;
+      sudoku={puzzle:record.puzzle,solution:record.solution};sudokuCells=record.cells;sudokuMarks=new Set(record.marks);sudokuSelected=record.selected;sudokuError=-1;
+      if(SudokuEngine.solved(sudokuCells)||(Array.isArray(wins.sudokuRounds)&&wins.sudokuRounds.includes(sudoku.puzzle.join(''))))awarded.add('sudoku');
+      renderSudoku('已恢复上次保存的进度。');
+    }catch{}
   }
   function renderSudoku(message){
     const won=SudokuEngine.solved(sudokuCells);resetLabel('sudoku',won?'won':'playing');
@@ -88,7 +105,7 @@ window.GameRoom=(()=>{
   function enter(){if(selected)choose(selected);}
   function setup(){
     if(ready)return;ready=true;
-    document.querySelectorAll('[data-game]').forEach(button=>button.onclick=()=>choose(button.dataset.game));$('#memory-reset').onclick=resetMemory;$('#sudoku-reset').onclick=resetSudoku;$('#puzzle-reset').onclick=resetPuzzle;
+    document.querySelectorAll('[data-game]').forEach(button=>button.onclick=()=>choose(button.dataset.game));$('#memory-reset').onclick=resetMemory;$('#sudoku-reset').onclick=resetSudoku;$('#sudoku-save').onclick=saveSudoku;$('#puzzle-reset').onclick=resetPuzzle;
     $('#puzzle-undo').onclick=()=>{if(!undo)return;numbers=undo.numbers;score=undo.score;keepPlaying=undo.keepPlaying;undo=null;renderPuzzle();};
     $('#puzzle-continue').onclick=()=>{keepPlaying=true;renderPuzzle();};
     document.querySelectorAll('[data-direction]').forEach(button=>button.onclick=()=>movePuzzle(button.dataset.direction));

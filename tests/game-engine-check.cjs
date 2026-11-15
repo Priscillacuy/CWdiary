@@ -14,3 +14,12 @@ assert.deepEqual([...puzzle.milestones(3000,[1000,2000,2048])],[3000]);
 assert.deepEqual([...puzzle.milestones(1000,[1000,2000,2048])],[]); // Undo must not reward twice.
 assert.deepEqual([...puzzle.milestones(1000)],[1000]); // New round resets claims.
 console.log('100 Sudoku puzzles and 7 score celebration cases passed');
+
+const sample=sudoku.generate();const saved={version:1,...sample,cells:sample.puzzle.slice(),marks:[],selected:sample.puzzle.indexOf(0)};
+assert(sudoku.validSave(saved));
+assert(!sudoku.validSave({...saved,cells:[]}));
+assert(!sudoku.validSave({...saved,marks:[81]}));
+const given=sample.puzzle.findIndex(Boolean),modified=saved.cells.slice();modified[given]=0;
+assert(!sudoku.validSave({...saved,cells:modified}));
+assert(!sudoku.validSave({...saved,solution:Array(81).fill(1)}));
+console.log('Sudoku saved-progress validation passed');

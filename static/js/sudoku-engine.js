@@ -13,5 +13,9 @@
     for(const i of shuffled(Array.from({length:81},(_,i)=>i),random)){const old=puzzle[i];puzzle[i]=0;if(singles(puzzle))removed++;else puzzle[i]=old;if(removed===36)break;}
     return {puzzle,solution};
   }
-  const engine={generate,candidates,solved,singles};root.SudokuEngine=engine;if(typeof module!=='undefined')module.exports=engine;
+  function validSave(record){
+    const values=a=>Array.isArray(a)&&a.length===81&&a.every(n=>Number.isInteger(n)&&n>=0&&n<=9);
+    return Boolean(record&&record.version===1&&values(record.puzzle)&&values(record.solution)&&values(record.cells)&&solved(record.solution)&&record.puzzle.every((n,i)=>!n||n===record.solution[i]&&n===record.cells[i])&&Array.isArray(record.marks)&&record.marks.every(i=>Number.isInteger(i)&&i>=0&&i<81&&!record.puzzle[i])&&Number.isInteger(record.selected)&&record.selected>=-1&&record.selected<81);
+  }
+  const engine={generate,candidates,solved,singles,validSave};root.SudokuEngine=engine;if(typeof module!=='undefined')module.exports=engine;
 })(typeof window!=='undefined'?window:globalThis);
