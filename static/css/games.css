@@ -34,3 +34,10 @@
 .sudoku-cell.is-marked{background:#f3ff66;color:#62452e}.sudoku-cell.is-marked.is-selected{background:#f3ff66}.sudoku-tools #sudoku-mark[aria-pressed="true"]{background:#f3ff66;border-color:#a6a34b}
 
 .sudoku-heading-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}.sudoku-heading-actions #sudoku-save{background:#e5e9d7;border-color:#b8c29e}@media(max-width:600px){.sudoku-heading-actions{justify-content:flex-start}}
+
+.puzzle-board{position:relative}.puzzle-moving{position:absolute;z-index:2;pointer-events:none;will-change:transform;aspect-ratio:auto}
+.puzzle-cell.is-merged{animation:puzzle-merge .18s ease-out}.puzzle-cell.is-spawn{animation:puzzle-appear .16s ease-out}
+@keyframes puzzle-merge{0%{transform:scale(.92)}55%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes puzzle-appear{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+#puzzle-save{background:#e5e9d7;border-color:#b8c29e}
+@media(prefers-reduced-motion:reduce){.puzzle-cell.is-merged,.puzzle-cell.is-spawn{animation:none}}

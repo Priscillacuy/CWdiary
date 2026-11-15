@@ -23,3 +23,18 @@ const given=sample.puzzle.findIndex(Boolean),modified=saved.cells.slice();modifi
 assert(!sudoku.validSave({...saved,cells:modified}));
 assert(!sudoku.validSave({...saved,solution:Array(81).fill(1)}));
 console.log('Sudoku saved-progress validation passed');
+const animated=puzzle.move([2,2,2,2,...Array(12).fill(0)],'left');
+assert.deepEqual([...animated.merged],[0,1]);
+assert.deepEqual(animated.transitions.map(t=>[t.from,t.to]),[[0,0],[1,0],[2,1],[3,1]]);
+for(let i=0;i<100;i++){
+ const board=Array.from({length:16},()=>Math.random()<.3?0:2**(1+Math.floor(Math.random()*7)));
+ for(const direction of ['left','right','up','down']){
+  const result=puzzle.move(board,direction),reconstructed=Array(16).fill(0);
+  result.transitions.forEach(t=>{assert.equal(t.value,board[t.from]);reconstructed[t.to]+=t.value;});
+  assert.deepEqual(reconstructed,[...result.board]);
+  assert.equal(new Set(result.transitions.map(t=>t.from)).size,board.filter(Boolean).length);
+ }
+}
+const record={version:1,numbers:[2,4,...Array(14).fill(0)],score:4,keepPlaying:false,roundId:'test-round',completed:false,milestones:[],undo:null};
+assert(puzzle.validSave(record));assert(!puzzle.validSave({...record,numbers:Array(16).fill(3)}));assert(!puzzle.validSave({...record,score:-1}));assert(!puzzle.validSave({...record,undo:{numbers:[]}}));
+console.log('400 tile-motion mappings and 2048 saved progress validated');

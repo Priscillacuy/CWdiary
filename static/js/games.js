@@ -8,11 +8,11 @@ window.GameRoom=(()=>{
   let account='',wins={},awarded=new Set(),celebration=null;
   let ready=false,selected='',deck=[],flipped=[],matched=new Set(),turns=0,mismatch=null;
   let sudoku=null,sudokuCells=[],sudokuSelected=-1,sudokuError=-1,sudokuMarks=new Set();
-  let numbers=Array(16).fill(0),score=0,undo=null,keepPlaying=false,touch=null,scoreCelebrations=new Set();
+  let numbers=Array(16).fill(0),score=0,undo=null,keepPlaying=false,touch=null,scoreCelebrations=new Set(),puzzleRound='',puzzleAnimating=false,puzzleMotionSerial=0,queuedDirection=null;
   function setUser(id){
     const next=id==null?'':String(id);if(account===next)return;account=next;
     try{wins=JSON.parse(localStorage.getItem('cwdiary-game-wins:'+account)||'{}')||{};}catch{wins={};}
-    if(ready){resetMemory();resetSudoku();restoreSudoku();resetPuzzle();renderWins();}
+    if(ready){resetMemory();resetSudoku();restoreSudoku();resetPuzzle();restorePuzzle();renderWins();}
   }
   function renderWins(){
     for(const game of ['memory','sudoku','puzzle']){
@@ -31,6 +31,7 @@ window.GameRoom=(()=>{
   function complete(game){
     if(awarded.has(game))return;awarded.add(game);
     if(game==='sudoku'){const key=sudoku.puzzle.join('');if(Array.isArray(wins.sudokuRounds)&&wins.sudokuRounds.includes(key))return;wins.sudokuRounds=[...(Array.isArray(wins.sudokuRounds)?wins.sudokuRounds:[]),key].slice(-100);}
+    if(game==='puzzle'){if(Array.isArray(wins.puzzleRounds)&&wins.puzzleRounds.includes(puzzleRound))return;wins.puzzleRounds=[...(Array.isArray(wins.puzzleRounds)?wins.puzzleRounds:[]),puzzleRound].slice(-100);}
     wins[game]=(Number.isSafeInteger(wins[game])&&wins[game]>0?wins[game]:0)+1;
     if(account)try{localStorage.setItem('cwdiary-game-wins:'+account,JSON.stringify(wins));}catch{}
     renderWins();celebrate();
@@ -84,29 +85,52 @@ window.GameRoom=(()=>{
   }
   function addNumber(){const empty=numbers.map((value,index)=>value?-1:index).filter(i=>i>=0);if(empty.length)numbers[empty[Math.floor(Math.random()*empty.length)]]=Math.random()<0.9?2:4;}
   function puzzleBlocked(){return numbers.some(value=>value>=2048)&&!keepPlaying||!Puzzle2048.canMove(numbers);}
-  function renderPuzzle(){
-    $('#puzzle-score').textContent=String(score);$('#puzzle-undo').disabled=!undo;
+  function renderPuzzle(message,merged=[],spawn=-1){
+    $('#puzzle-score').textContent=String(score);$('#puzzle-undo').disabled=!undo||puzzleAnimating;$('#puzzle-save').disabled=puzzleAnimating;
     const won=numbers.some(value=>value>=2048)&&!keepPlaying,stuck=!Puzzle2048.canMove(numbers);
     $('#puzzle-continue').hidden=!won;resetLabel('puzzle',won?'won':stuck?'lost':'playing');
-    $('#puzzle-status').textContent=t(won?'合成 2048 了！可以继续挑战更大的数字。':stuck?'继续努力！不要气馁，试试撤销或新的一局。':'把相同的数字合在一起，向 2048 出发。');
-    $('#puzzle-board').replaceChildren(...numbers.map((value,index)=>{const cell=document.createElement('div');cell.className='puzzle-cell';cell.dataset.value=value;cell.textContent=value?String(value):'';cell.setAttribute('aria-label',en()?`Cell ${index+1}: ${value||'empty'}`:`第 ${index+1} 格：${value||'空格'}`);return cell;}));
+    $('#puzzle-status').textContent=t(message||(won?'合成 2048 了！可以继续挑战更大的数字。':stuck?'继续努力！不要气馁，试试撤销或新的一局。':'把相同的数字合在一起，向 2048 出发。'));
+    $('#puzzle-board').replaceChildren(...numbers.map((value,index)=>{const cell=document.createElement('div');cell.className='puzzle-cell'+(merged.includes(index)?' is-merged':'')+(index===spawn?' is-spawn':'');cell.dataset.value=value;cell.textContent=value?String(value):'';cell.setAttribute('aria-label',en()?`Cell ${index+1}: ${value||'empty'}`:`第 ${index+1} 格：${value||'空格'}`);return cell;}));
     document.querySelectorAll('[data-direction]').forEach(button=>button.disabled=puzzleBlocked());
   }
-  function resetPuzzle(){awarded.delete('puzzle');scoreCelebrations.clear();numbers=Array(16).fill(0);score=0;undo=null;keepPlaying=false;addNumber();addNumber();renderPuzzle();}
-  function movePuzzle(direction){
+  function resetPuzzle(){cancelPuzzleMotion();puzzleRound=crypto.randomUUID();awarded.delete('puzzle');scoreCelebrations.clear();numbers=Array(16).fill(0);score=0;undo=null;keepPlaying=false;addNumber();addNumber();renderPuzzle();}
+  function savePuzzle(){
+    try{if(!account)throw Error();localStorage.setItem('cwdiary-2048-save:'+account,JSON.stringify({version:1,numbers,score,keepPlaying,undo,roundId:puzzleRound,completed:awarded.has('puzzle'),milestones:[...scoreCelebrations]}));renderPuzzle('进度已保存，下次进入将继续这一局。');}
+    catch{renderPuzzle('保存未完成，请检查浏览器储存空间后重试。');}
+  }
+  function restorePuzzle(){
+    if(!account)return;
+    try{const record=JSON.parse(localStorage.getItem('cwdiary-2048-save:'+account)||'null');if(!Puzzle2048.validSave(record))return;cancelPuzzleMotion();numbers=record.numbers;score=record.score;keepPlaying=record.keepPlaying;undo=record.undo||null;puzzleRound=record.roundId;scoreCelebrations=new Set(record.milestones);if(record.completed||(Array.isArray(wins.puzzleRounds)&&wins.puzzleRounds.includes(puzzleRound)))awarded.add('puzzle');renderPuzzle('已恢复上次保存的进度。');}catch{}
+  }
+  function cancelPuzzleMotion(){
+    puzzleMotionSerial++;queuedDirection=null;puzzleAnimating=false;
+    const board=$('#puzzle-board');board.querySelectorAll('.puzzle-moving').forEach(tile=>{tile.getAnimations().forEach(a=>a.cancel());tile.remove();});
+  }
+  async function slidePuzzle(result){
+    const board=$('#puzzle-board'),frame=board.getBoundingClientRect(),slots=[...board.children].filter(c=>c.classList.contains('puzzle-cell')).map(c=>c.getBoundingClientRect());
+    const moving=result.transitions.map(({from,to,value})=>{const tile=document.createElement('div');tile.className='puzzle-cell puzzle-moving';tile.dataset.value=value;tile.textContent=value;tile.setAttribute('aria-hidden','true');Object.assign(tile.style,{left:(slots[from].left-frame.left)+'px',top:(slots[from].top-frame.top)+'px',width:slots[from].width+'px',height:slots[from].height+'px'});board.append(tile);return {tile,from,to};});
+    [...board.children].filter(c=>!c.classList.contains('puzzle-moving')).forEach(c=>{c.dataset.value=0;c.textContent='';});
+    const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:170;
+    await Promise.all(moving.map(({tile,from,to})=>tile.animate([{transform:'translate(0,0)'},{transform:`translate(${slots[to].left-slots[from].left}px,${slots[to].top-slots[from].top}px)`}],{duration,easing:'cubic-bezier(.2,.7,.3,1)',fill:'forwards'}).finished.catch(()=>{})));
+  }
+  async function movePuzzle(direction){
+    if(puzzleAnimating){queuedDirection=direction;return;}
     if(puzzleBlocked())return;const result=Puzzle2048.move(numbers,direction);if(!result.changed)return;
-    undo={numbers:numbers.slice(),score,keepPlaying};numbers=result.board;score+=result.score;addNumber();
+    undo={numbers:numbers.slice(),score,keepPlaying};numbers=result.board;score+=result.score;const beforeSpawn=numbers.slice();addNumber();const spawn=numbers.findIndex((v,i)=>v!==beforeSpawn[i]);
     let milestone=false;for(const mark of Puzzle2048.milestones(score,[...scoreCelebrations])){scoreCelebrations.add(mark);milestone=true;}
     const newWin=numbers.some(value=>value>=2048)&&!awarded.has('puzzle');
-    if(newWin)complete('puzzle');else if(milestone)celebrate();renderPuzzle();
+    if(newWin)complete('puzzle');else if(milestone)celebrate();
+    puzzleAnimating=true;const serial=++puzzleMotionSerial;$('#puzzle-undo').disabled=true;$('#puzzle-save').disabled=true;
+    await slidePuzzle(result);if(serial!==puzzleMotionSerial)return;
+    puzzleAnimating=false;renderPuzzle(undefined,result.merged,spawn);const next=queuedDirection;queuedDirection=null;if(next)movePuzzle(next);
   }
-  function leave(){if(!ready)return;if(mismatch)clearMismatch();touch=null;}
+  function leave(){if(!ready)return;if(puzzleAnimating){cancelPuzzleMotion();renderPuzzle();}if(mismatch)clearMismatch();touch=null;}
   function choose(name){leave();selected=name;renderWins();for(const id of ['memory','sudoku','puzzle'])$('#'+id+'-panel').hidden=id!==name;document.querySelectorAll('[data-game]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.game===name)));if(name==='memory')renderMemory();if(name==='sudoku')renderSudoku();if(name==='puzzle')renderPuzzle();}
   function enter(){if(selected)choose(selected);}
   function setup(){
     if(ready)return;ready=true;
-    document.querySelectorAll('[data-game]').forEach(button=>button.onclick=()=>choose(button.dataset.game));$('#memory-reset').onclick=resetMemory;$('#sudoku-reset').onclick=resetSudoku;$('#sudoku-save').onclick=saveSudoku;$('#puzzle-reset').onclick=resetPuzzle;
-    $('#puzzle-undo').onclick=()=>{if(!undo)return;numbers=undo.numbers;score=undo.score;keepPlaying=undo.keepPlaying;undo=null;renderPuzzle();};
+    document.querySelectorAll('[data-game]').forEach(button=>button.onclick=()=>choose(button.dataset.game));$('#memory-reset').onclick=resetMemory;$('#sudoku-reset').onclick=resetSudoku;$('#sudoku-save').onclick=saveSudoku;$('#puzzle-reset').onclick=resetPuzzle;$('#puzzle-save').onclick=savePuzzle;
+    $('#puzzle-undo').onclick=()=>{if(!undo||puzzleAnimating)return;cancelPuzzleMotion();numbers=undo.numbers;score=undo.score;keepPlaying=undo.keepPlaying;undo=null;renderPuzzle();};
     $('#puzzle-continue').onclick=()=>{keepPlaying=true;renderPuzzle();};
     document.querySelectorAll('[data-direction]').forEach(button=>button.onclick=()=>movePuzzle(button.dataset.direction));
     document.addEventListener('keydown',event=>{if(selected!=='puzzle'||$('#games-view').hidden||event.target.closest('input,select,textarea,[contenteditable=true]')||event.ctrlKey||event.metaKey||event.altKey)return;const keys={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',a:'left',d:'right',w:'up',s:'down'};if(keys[event.key]){event.preventDefault();movePuzzle(keys[event.key]);}});
