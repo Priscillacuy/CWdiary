@@ -17,5 +17,6 @@
     return {board:next,score,changed:next.some((value,i)=>value!==board[i])};
   }
   function canMove(board){return board.some(value=>!value)||['left','up'].some(direction=>move(board,direction).changed);}
-  const engine={slideLine,move,canMove};root.Puzzle2048=engine;if(typeof module!=='undefined')module.exports=engine;
+  function milestones(score,claimed=[]){return [...Array.from({length:Math.floor(score/1000)},(_,i)=>(i+1)*1000),2048].filter(n=>n<=score&&!claimed.includes(n)).sort((a,b)=>a-b);}
+  const engine={slideLine,move,canMove,milestones};root.Puzzle2048=engine;if(typeof module!=='undefined')module.exports=engine;
 })(typeof window!=='undefined'?window:globalThis);

@@ -18,6 +18,7 @@
   <script defer src="/static/js/relaxation-player.js"></script>
   <script defer src="/static/js/2048-engine.js"></script>
   <script defer src="/static/vendor/canvas-confetti.min.js"></script>
+  <script defer src="/static/js/sudoku-engine.js"></script>
   <script defer src="/static/js/games.js"></script>
   <script defer src="/static/js/app.js"></script>
 </head>
@@ -85,11 +86,11 @@
     <p class="games-intro">选一款轻松玩一会儿，游戏在本地运行，按自己的节奏就好。</p>
     <div class="game-picker" aria-label="选择小游戏">
       <button type="button" data-game="memory" aria-pressed="false"><i data-feather="copy"></i><span><strong>记忆翻牌</strong><small>找到相同的动物头像</small></span></button>
-      <button type="button" data-game="tictac" aria-pressed="false"><i data-feather="hash"></i><span><strong>井字棋</strong><small>和电脑轻松下一局</small></span></button>
+      <button type="button" data-game="sudoku" aria-pressed="false"><i data-feather="hash"></i><span><strong>入门数独</strong><small>填一填数字，轻松动动脑</small></span></button>
       <button type="button" data-game="puzzle" aria-pressed="false"><i data-feather="grid"></i><span><strong>2048 数字合成</strong><small>滑动合并，挑战更大的数字</small></span></button>
     </div>
     <section class="game-panel" id="memory-panel" hidden><div class="game-panel-heading"><div><h2>记忆翻牌</h2><p>每次翻开两张牌，找到猫咪、小狗、兔子、狐狸、熊猫和小熊的相同头像。</p></div><button type="button" class="secondary" id="memory-reset">重新开始</button></div><p class="game-status" id="memory-status" role="status"></p><div id="memory-board" class="memory-board" role="group" aria-label="记忆翻牌棋盘"></div></section>
-    <section class="game-panel" id="tictac-panel" hidden><div class="game-panel-heading"><div><h2>井字棋</h2><p>你先手画叉，电脑画圈，三个连成一线就获胜。</p></div><button type="button" class="secondary" id="tictac-reset">再来一局</button></div><p class="game-status" id="tictac-status" role="status"></p><div id="tictac-board" class="tictac-board" role="group" aria-label="井字棋棋盘"></div></section>
+    <section class="game-panel" id="sudoku-panel" hidden><div class="game-panel-heading"><div><h2>入门数独</h2><p>把 1–9 填入空格，每行、每列和每个九宫格内不重复。没有计时，随时可以用提示。</p></div><button type="button" class="secondary" id="sudoku-reset">重新开始</button></div><p class="game-status" id="sudoku-status" role="status"></p><div id="sudoku-board" class="sudoku-board" role="group" aria-label="数独棋盘"></div><div class="sudoku-tools" role="group" aria-label="填写数独数字"><button type="button" data-sudoku-number="1">1</button><button type="button" data-sudoku-number="2">2</button><button type="button" data-sudoku-number="3">3</button><button type="button" data-sudoku-number="4">4</button><button type="button" data-sudoku-number="5">5</button><button type="button" data-sudoku-number="6">6</button><button type="button" data-sudoku-number="7">7</button><button type="button" data-sudoku-number="8">8</button><button type="button" data-sudoku-number="9">9</button><button type="button" data-sudoku-number="0">擦除</button><button type="button" id="sudoku-hint">提示</button></div></section>
     <section class="game-panel" id="puzzle-panel" hidden><div class="game-panel-heading"><div><h2>2048 数字合成</h2><p>用方向键、滑动棋盘或下方按钮移动，相同数字相遇就会合并。</p></div><button type="button" class="secondary" id="puzzle-reset">新的一局</button></div><div class="puzzle-toolbar"><span>得分 <strong id="puzzle-score">0</strong></span><button type="button" class="text-button" id="puzzle-undo" disabled>撤销一步</button><button type="button" class="secondary" id="puzzle-continue" hidden>继续挑战</button></div><p class="game-status" id="puzzle-status" role="status"></p><div class="puzzle-play-area"><div id="puzzle-board" class="puzzle-board" tabindex="0" role="group" aria-label="2048 棋盘"></div><div class="puzzle-directions" role="group" aria-label="移动方向"><button type="button" data-direction="left" aria-label="向左">左</button><button type="button" data-direction="up" aria-label="向上">上</button><button type="button" data-direction="down" aria-label="向下">下</button><button type="button" data-direction="right" aria-label="向右">右</button></div></div></section>
   </section>
   <footer>仅供生活参考，不替代医生、心理咨询师或营养师的专业意见。</footer>

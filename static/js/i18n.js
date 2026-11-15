@@ -85,6 +85,7 @@ Object.assign(dictionary,{
  '仅本次活动文案交给 DeepSeek 改写成口语，再由 ElevenLabs 配音，不发送日记原文。':'Only these activity instructions go to DeepSeek for a conversational script, then to ElevenLabs for narration. Your original diary is not sent.'
 });
 Object.assign(dictionary,{'累计通关':'Completed games','每一次进步，都值得庆祝':'Every step forward deserves a celebration','不要气馁，继续努力！再来一局吧。':'Keep going! You can do it. Try another round.','继续努力！不要气馁，试试撤销或新的一局。':'Keep going! Try undoing a move or starting a new game.'});
+Object.assign(dictionary,{'开启新一局':'Start a new game','再来一局':'Try again','入门数独':'Beginner Sudoku','填一填数字，轻松动动脑':'Fill in numbers at your own pace','把 1–9 填入空格，每行、每列和每个九宫格内不重复。没有计时，随时可以用提示。':'Fill in 1–9 without repeats in each row, column or 3×3 box. No timer; hints are always available.','数独完成了，做得很好！':'Sudoku complete. Well done!','选择一个空格，再点下方数字；卡住时可以用提示。':'Select a cell, then a number below. Use a hint whenever you like.','不要气馁，换个数字试试，也可以点提示。':'Keep going! Try another number or use a hint.','数独棋盘':'Sudoku board','填写数独数字':'Enter Sudoku numbers','擦除':'Erase','提示':'Hint'});
 const locales={zh:'zh-CN','zh-HK':'zh-HK','zh-TW':'zh-TW',en:'en-US'};
 const converters={'zh-HK':OpenCC.Converter({from:'cn',to:'hk'}),'zh-TW':OpenCC.Converter({from:'cn',to:'twp'})};
 const regional={
