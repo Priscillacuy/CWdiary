@@ -7,7 +7,7 @@ window.GameRoom=(()=>{
   const avatars=faces.map(([animal])=>{const img=new Image();img.src='/static/images/avatars/watercolor-'+animal+'.webp';img.alt='';return img;});
   let account='',wins={},awarded=new Set(),celebration=null;
   let ready=false,selected='',deck=[],flipped=[],matched=new Set(),turns=0,mismatch=null;
-  let sudoku=null,sudokuCells=[],sudokuSelected=-1,sudokuError=-1;
+  let sudoku=null,sudokuCells=[],sudokuSelected=-1,sudokuError=-1,sudokuMarks=new Set();
   let numbers=Array(16).fill(0),score=0,undo=null,keepPlaying=false,touch=null,scoreCelebrations=new Set();
   function setUser(id){
     const next=id==null?'':String(id);if(account===next)return;account=next;
@@ -46,21 +46,22 @@ window.GameRoom=(()=>{
   function flip(i){if(mismatch||matched.has(i)||flipped.includes(i))return;flipped.push(i);if(flipped.length===2){turns++;if(deck[flipped[0]]===deck[flipped[1]]){flipped.forEach(n=>matched.add(n));flipped=[];if(matched.size===12)complete('memory');}else mismatch=setTimeout(clearMismatch,800);}renderMemory();}
   function resetLabel(game,result){$('#'+game+'-reset').textContent=t(result==='won'?'开启新一局':result==='lost'?'再来一局':'重新开始');}
   function resetSudoku(){
-    awarded.delete('sudoku');sudoku=SudokuEngine.generate();sudokuCells=sudoku.puzzle.slice();sudokuSelected=sudokuCells.indexOf(0);sudokuError=-1;renderSudoku();
+    awarded.delete('sudoku');sudokuMarks.clear();sudoku=SudokuEngine.generate();sudokuCells=sudoku.puzzle.slice();sudokuSelected=sudokuCells.indexOf(0);sudokuError=-1;renderSudoku();
   }
   function renderSudoku(message){
     const won=SudokuEngine.solved(sudokuCells);resetLabel('sudoku',won?'won':'playing');
     $('#sudoku-status').textContent=t(message||(won?'数独完成了，做得很好！':'选择一个空格，再点下方数字；卡住时可以用提示。'));
     $('#sudoku-board').replaceChildren(...sudokuCells.map((value,i)=>{
-      const button=document.createElement('button');button.type='button';button.className='sudoku-cell'+(sudoku.puzzle[i]?' is-given':'')+(i===sudokuSelected?' is-selected':'')+(i===sudokuError?' is-error':'');button.textContent=value||'';button.disabled=Boolean(sudoku.puzzle[i])||won;button.setAttribute('aria-label',en()?`Row ${Math.floor(i/9)+1}, column ${i%9+1}: ${value||'empty'}`:`第 ${Math.floor(i/9)+1} 行第 ${i%9+1} 列：${value||'空格'}`);button.setAttribute('aria-pressed',String(i===sudokuSelected));button.onclick=()=>{sudokuSelected=i;sudokuError=-1;renderSudoku();};return button;
+      const button=document.createElement('button');button.type='button';button.className='sudoku-cell'+(sudoku.puzzle[i]?' is-given':'')+(i===sudokuSelected?' is-selected':'')+(i===sudokuError?' is-error':'')+(sudokuMarks.has(i)?' is-marked':'');button.textContent=value||'';button.disabled=Boolean(sudoku.puzzle[i])||won;button.setAttribute('aria-label',en()?`Row ${Math.floor(i/9)+1}, column ${i%9+1}: ${value||'empty'}`:`第 ${Math.floor(i/9)+1} 行第 ${i%9+1} 列：${value||'空格'}`);if(sudokuMarks.has(i))button.setAttribute('aria-description',t('已标注为不确定'));button.setAttribute('aria-pressed',String(i===sudokuSelected));button.onclick=()=>{sudokuSelected=i;sudokuError=-1;renderSudoku();};return button;
     }));
+    $('#sudoku-mark').disabled=won||sudokuSelected<0||Boolean(sudoku.puzzle[sudokuSelected]);$('#sudoku-mark').setAttribute('aria-pressed',String(sudokuMarks.has(sudokuSelected)));
     $('#sudoku-panel').querySelectorAll('[data-sudoku-number],#sudoku-hint').forEach(b=>b.disabled=won);
   }
   function fillSudoku(value,hint=false){
     if(SudokuEngine.solved(sudokuCells))return;
     if(hint&&(sudokuSelected<0||sudoku.puzzle[sudokuSelected]||sudokuCells[sudokuSelected]===sudoku.solution[sudokuSelected]))sudokuSelected=sudokuCells.findIndex((n,i)=>!sudoku.puzzle[i]&&n!==sudoku.solution[i]);
     if(sudokuSelected<0||sudoku.puzzle[sudokuSelected])return;
-    const i=sudokuSelected;value=hint?sudoku.solution[i]:value;sudokuCells[i]=value;sudokuError=value&&value!==sudoku.solution[i]?i:-1;
+    const i=sudokuSelected;value=hint?sudoku.solution[i]:value;sudokuCells[i]=value;if(!value||hint)sudokuMarks.delete(i);sudokuError=value&&value!==sudoku.solution[i]?i:-1;
     if(SudokuEngine.solved(sudokuCells))complete('sudoku');
     renderSudoku(sudokuError>=0?'不要气馁，换个数字试试，也可以点提示。':undefined);
   }
@@ -92,7 +93,7 @@ window.GameRoom=(()=>{
     $('#puzzle-continue').onclick=()=>{keepPlaying=true;renderPuzzle();};
     document.querySelectorAll('[data-direction]').forEach(button=>button.onclick=()=>movePuzzle(button.dataset.direction));
     document.addEventListener('keydown',event=>{if(selected!=='puzzle'||$('#games-view').hidden||event.target.closest('input,select,textarea,[contenteditable=true]')||event.ctrlKey||event.metaKey||event.altKey)return;const keys={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',a:'left',d:'right',w:'up',s:'down'};if(keys[event.key]){event.preventDefault();movePuzzle(keys[event.key]);}});
-    document.querySelectorAll('[data-sudoku-number]').forEach(b=>b.onclick=()=>fillSudoku(Number(b.dataset.sudokuNumber)));$('#sudoku-hint').onclick=()=>fillSudoku(0,true);
+    document.querySelectorAll('[data-sudoku-number]').forEach(b=>b.onclick=()=>fillSudoku(Number(b.dataset.sudokuNumber)));$('#sudoku-hint').onclick=()=>fillSudoku(0,true);$('#sudoku-mark').onclick=()=>{if(SudokuEngine.solved(sudokuCells)||sudokuSelected<0||sudoku.puzzle[sudokuSelected])return;if(sudokuMarks.has(sudokuSelected))sudokuMarks.delete(sudokuSelected);else sudokuMarks.add(sudokuSelected);renderSudoku();};
     document.addEventListener('keydown',event=>{if(selected!=='sudoku'||$('#games-view').hidden||event.target.closest('input,select,textarea,[contenteditable=true]')||event.ctrlKey||event.metaKey||event.altKey)return;if(/^[1-9]$/.test(event.key)){event.preventDefault();fillSudoku(Number(event.key));}else if(['Backspace','Delete','0'].includes(event.key)){event.preventDefault();fillSudoku(0);}});
     const board=$('#puzzle-board');board.addEventListener('pointerdown',event=>{if(!event.isPrimary||event.button!==0)return;touch={x:event.clientX,y:event.clientY,id:event.pointerId};board.setPointerCapture(event.pointerId);});
     board.addEventListener('pointerup',event=>{if(!touch||touch.id!==event.pointerId)return;const dx=event.clientX-touch.x,dy=event.clientY-touch.y;touch=null;if(Math.max(Math.abs(dx),Math.abs(dy))<24)return;movePuzzle(Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up');});
