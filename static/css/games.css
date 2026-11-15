@@ -41,3 +41,13 @@
 @keyframes puzzle-appear{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
 #puzzle-save{background:#e5e9d7;border-color:#b8c29e}
 @media(prefers-reduced-motion:reduce){.puzzle-cell.is-merged,.puzzle-cell.is-spawn{animation:none}}
+
+#puzzle-panel{padding-right:190px}@media(max-width:1000px){#puzzle-panel{padding-right:0}}
+.puzzle-end{position:absolute;inset:12px;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:22px;text-align:center;background:#fff5e7ed;backdrop-filter:blur(2px);border-radius:12px;animation:puzzle-end-appear .4s ease-out;color:#6a482f}
+.puzzle-end strong{font-family:var(--serif);font-size:38px;line-height:1.25;animation:puzzle-end-title 1.5s ease-in-out 2}.puzzle-end p{font-size:14px;line-height:1.8}.puzzle-end .primary{font-size:16px;padding:12px 24px}
+@keyframes puzzle-end-appear{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+@keyframes puzzle-end-title{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@media(max-width:600px){.puzzle-end{inset:9px;padding:18px;gap:16px}.puzzle-end strong{font-size:30px}}
+@media(prefers-reduced-motion:reduce){.puzzle-end,.puzzle-end strong{animation:none}}
+
+.puzzle-best strong{font-size:34px;overflow-wrap:anywhere}

@@ -88,6 +88,8 @@ Object.assign(dictionary,{'累计通关':'Completed games','每一次进步，�
 Object.assign(dictionary,{'开启新一局':'Start a new game','再来一局':'Try again','入门数独':'Beginner Sudoku','填一填数字，轻松动动脑':'Fill in numbers at your own pace','把 1–9 填入空格，每行、每列和每个九宫格内不重复。没有计时，随时可以用提示。':'Fill in 1–9 without repeats in each row, column or 3×3 box. No timer; hints are always available.','数独完成了，做得很好！':'Sudoku complete. Well done!','选择一个空格，再点下方数字；卡住时可以用提示。':'Select a cell, then a number below. Use a hint whenever you like.','不要气馁，换个数字试试，也可以点提示。':'Keep going! Try another number or use a hint.','数独棋盘':'Sudoku board','填写数独数字':'Enter Sudoku numbers','擦除':'Erase','提示':'Hint'});
 Object.assign(dictionary,{'标注':'Mark','已标注为不确定':'Marked as uncertain'});
 Object.assign(dictionary,{'保存记录':'Save progress','进度已保存，下次进入将继续这一局。':'Progress saved. You can continue this puzzle next time.','已恢复上次保存的进度。':'Your saved progress has been restored.','保存未完成，请检查浏览器储存空间后重试。':'Could not save. Check your browser storage and try again.'});
+Object.assign(dictionary,{'游戏结束':'Game over','不要气馁，下一局又是新的开始。':'Keep your spirits up. A new game is a fresh start.','继续努力，慢慢找到自己的节奏。':'Keep going and find your own rhythm.','休息一下，再来一局吧。':'Take a little break, then try another game.'});
+Object.assign(dictionary,{'最高纪录':'Best score','分数':'Points'});
 const locales={zh:'zh-CN','zh-HK':'zh-HK','zh-TW':'zh-TW',en:'en-US'};
 const converters={'zh-HK':OpenCC.Converter({from:'cn',to:'hk'}),'zh-TW':OpenCC.Converter({from:'cn',to:'twp'})};
 const regional={

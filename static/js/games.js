@@ -5,6 +5,7 @@ window.GameRoom=(()=>{
   const svg=name=>window.feather.icons[name].toSvg({'aria-hidden':'true'});
   const faces=[['cat','猫咪'],['dog','小狗'],['rabbit','兔子'],['fox','狐狸'],['panda','熊猫'],['bear','小熊']];
   const avatars=faces.map(([animal])=>{const img=new Image();img.src='/static/images/avatars/watercolor-'+animal+'.webp';img.alt='';return img;});
+  let puzzleBest=0;
   let account='',wins={},awarded=new Set(),celebration=null;
   let ready=false,selected='',deck=[],flipped=[],matched=new Set(),turns=0,mismatch=null;
   let sudoku=null,sudokuCells=[],sudokuSelected=-1,sudokuError=-1,sudokuMarks=new Set();
@@ -12,17 +13,25 @@ window.GameRoom=(()=>{
   function setUser(id){
     const next=id==null?'':String(id);if(account===next)return;account=next;
     try{wins=JSON.parse(localStorage.getItem('cwdiary-game-wins:'+account)||'{}')||{};}catch{wins={};}
+    try{const savedBest=Number(localStorage.getItem('cwdiary-2048-best:'+account)||0);puzzleBest=Number.isSafeInteger(savedBest)&&savedBest>=0?savedBest:0;}catch{puzzleBest=0;}
     if(ready){resetMemory();resetSudoku();restoreSudoku();resetPuzzle();restorePuzzle();renderWins();}
   }
   function renderWins(){
-    for(const game of ['memory','sudoku','puzzle']){
+    $('#puzzle-panel .game-wins:not(.puzzle-best)')?.remove();renderPuzzleBest();
+    for(const game of ['memory','sudoku']){
       let card=$('#'+game+'-panel .game-wins');
       if(!card){card=document.createElement('aside');card.className='game-wins';card.setAttribute('aria-live','polite');$('#'+game+'-panel').append(card);}
       card.replaceChildren();const title=document.createElement('span');title.textContent=t('累计通关');const count=document.createElement('strong');count.textContent=String(Number.isSafeInteger(wins[game])&&wins[game]>0?wins[game]:0);const note=document.createElement('small');note.textContent=t('每一次进步，都值得庆祝');card.append(title,count,note);
     }
   }
+  function renderPuzzleBest(){
+    if(score>puzzleBest){puzzleBest=score;if(account)try{localStorage.setItem('cwdiary-2048-best:'+account,String(puzzleBest));}catch{}}
+    let card=$('#puzzle-panel .puzzle-best');if(!card){card=document.createElement('aside');card.className='game-wins puzzle-best';card.setAttribute('aria-live','polite');$('#puzzle-panel').append(card);}
+    const title=document.createElement('span');title.textContent=t('最高纪录');const value=document.createElement('strong');value.textContent=String(puzzleBest);const label=document.createElement('small');label.textContent=t('分数');card.replaceChildren(title,value,label);
+  }
+  function stopCelebration(){if(!celebration)return;clearInterval(celebration.interval);clearTimeout(celebration.timer);celebration.burst?.reset();celebration.canvas.remove();celebration=null;}
   function celebrate(kind='confetti',large=false){
-    if(celebration){clearInterval(celebration.interval);clearTimeout(celebration.timer);celebration.canvas.remove();}
+    stopCelebration();
     const canvas=document.createElement('canvas');canvas.className='game-confetti';canvas.dataset.effect=kind;canvas.dataset.large=String(large);canvas.setAttribute('aria-hidden','true');document.body.append(canvas);
     const burst=window.confetti.create(canvas,{resize:true,disableForReducedMotion:true});
     const fire=()=>{
@@ -30,13 +39,13 @@ window.GameRoom=(()=>{
         for(const origin of (large?[{x:.25,y:.3},{x:.5,y:.2},{x:.75,y:.35}]:[{x:.3,y:.35},{x:.7,y:.3}]))burst({particleCount:large?95:50,spread:360,startVelocity:large?52:30,gravity:.55,ticks:large?125:95,scalar:large?1.25:1,shapes:['circle'],origin,colors:['#ffd46b','#ff9678','#b9d596','#c0b5ec','#fff4c9']});
       }else for(const x of [.12,.88])burst({particleCount:32,spread:75,startVelocity:38,gravity:.85,ticks:90,origin:{x,y:.65},colors:['#dba45f','#99af7d','#e7c465','#d58d78','#fff2cc']});
     };
-    fire();const current={canvas,interval:setInterval(fire,450)};current.timer=setTimeout(()=>{clearInterval(current.interval);burst.reset();canvas.remove();if(celebration===current)celebration=null;},3600);celebration=current;
+    fire();const current={canvas,burst,interval:setInterval(fire,450)};current.timer=setTimeout(()=>{clearInterval(current.interval);burst.reset();canvas.remove();if(celebration===current)celebration=null;},3600);celebration=current;
   }
   function complete(game,kind='confetti',large=false){
     if(awarded.has(game))return;awarded.add(game);
     if(game==='sudoku'){const key=sudoku.puzzle.join('');if(Array.isArray(wins.sudokuRounds)&&wins.sudokuRounds.includes(key))return;wins.sudokuRounds=[...(Array.isArray(wins.sudokuRounds)?wins.sudokuRounds:[]),key].slice(-100);}
     if(game==='puzzle'){if(Array.isArray(wins.puzzleRounds)&&wins.puzzleRounds.includes(puzzleRound))return;wins.puzzleRounds=[...(Array.isArray(wins.puzzleRounds)?wins.puzzleRounds:[]),puzzleRound].slice(-100);}
-    wins[game]=(Number.isSafeInteger(wins[game])&&wins[game]>0?wins[game]:0)+1;
+    if(game!=='puzzle')wins[game]=(Number.isSafeInteger(wins[game])&&wins[game]>0?wins[game]:0)+1;
     if(account)try{localStorage.setItem('cwdiary-game-wins:'+account,JSON.stringify(wins));}catch{}
     renderWins();celebrate(kind,large);
   }
@@ -90,11 +99,19 @@ window.GameRoom=(()=>{
   function addNumber(){const empty=numbers.map((value,index)=>value?-1:index).filter(i=>i>=0);if(empty.length)numbers[empty[Math.floor(Math.random()*empty.length)]]=Math.random()<0.9?2:4;}
   function puzzleBlocked(){return numbers.some(value=>value>=2048)&&!keepPlaying||!Puzzle2048.canMove(numbers);}
   function renderPuzzle(message,merged=[],spawn=-1){
-    $('#puzzle-score').textContent=String(score);$('#puzzle-undo').disabled=!undo||puzzleAnimating;$('#puzzle-save').disabled=puzzleAnimating;
+    renderPuzzleBest();
+    $('#puzzle-score').textContent=String(score);$('#puzzle-undo').disabled=!undo||puzzleAnimating||!Puzzle2048.canMove(numbers);$('#puzzle-save').disabled=puzzleAnimating;
     const won=numbers.some(value=>value>=2048)&&!keepPlaying,stuck=!Puzzle2048.canMove(numbers);
-    $('#puzzle-continue').hidden=!won;resetLabel('puzzle',won?'won':stuck?'lost':'playing');
-    $('#puzzle-status').textContent=t(message||(won?'合成 2048 了！可以继续挑战更大的数字。':stuck?'继续努力！不要气馁，试试撤销或新的一局。':'把相同的数字合在一起，向 2048 出发。'));
+    $('#puzzle-continue').hidden=!won||stuck;resetLabel('puzzle',stuck?'lost':won?'won':'playing');
+    $('#puzzle-status').textContent=t(stuck?'游戏结束':message||(won?'合成 2048 了！可以继续挑战更大的数字。':'把相同的数字合在一起，向 2048 出发。'));
     $('#puzzle-board').replaceChildren(...numbers.map((value,index)=>{const cell=document.createElement('div');cell.className='puzzle-cell'+(merged.includes(index)?' is-merged':'')+(index===spawn?' is-spawn':'');cell.dataset.value=value;cell.textContent=value?String(value):'';cell.setAttribute('aria-label',en()?`Cell ${index+1}: ${value||'empty'}`:`第 ${index+1} 格：${value||'空格'}`);return cell;}));
+    if(stuck){
+      stopCelebration();
+      const end=document.createElement('div');end.className='puzzle-end';end.setAttribute('role','status');
+      const heading=document.createElement('strong');heading.textContent=t('游戏结束');
+      const copy=document.createElement('p');copy.textContent=t(['不要气馁，下一局又是新的开始。','继续努力，慢慢找到自己的节奏。','休息一下，再来一局吧。'][Math.floor(score/4)%3]);
+      const replay=document.createElement('button');replay.type='button';replay.className='primary';replay.textContent=t('再来一局');replay.onclick=resetPuzzle;end.append(heading,copy,replay);$('#puzzle-board').append(end);
+    }
     document.querySelectorAll('[data-direction]').forEach(button=>button.disabled=puzzleBlocked());
   }
   function resetPuzzle(){cancelPuzzleMotion();puzzleRound=crypto.randomUUID();awarded.delete('puzzle');scoreCelebrations.clear();numbers=Array(16).fill(0);score=0;undo=null;keepPlaying=false;addNumber();addNumber();renderPuzzle();}
@@ -123,7 +140,7 @@ window.GameRoom=(()=>{
     undo={numbers:numbers.slice(),score,keepPlaying};numbers=result.board;score+=result.score;const beforeSpawn=numbers.slice();addNumber();const spawn=numbers.findIndex((v,i)=>v!==beforeSpawn[i]);
     const milestones=Puzzle2048.milestones(score,[...scoreCelebrations]);milestones.forEach(mark=>scoreCelebrations.add(mark));const made2048=result.merged.some(i=>result.board[i]===2048);
     const newWin=numbers.some(value=>value>=2048)&&!awarded.has('puzzle');
-    if(newWin)complete('puzzle','fireworks',true);else if(made2048)celebrate('fireworks',true);else if(milestones.length)celebrate(Puzzle2048.celebrationFor(milestones.at(-1)));
+    if(!Puzzle2048.canMove(numbers))stopCelebration();else if(newWin)complete('puzzle','fireworks',true);else if(made2048)celebrate('fireworks',true);else if(milestones.length)celebrate(Puzzle2048.celebrationFor(milestones.at(-1)));
     puzzleAnimating=true;const serial=++puzzleMotionSerial;$('#puzzle-undo').disabled=true;$('#puzzle-save').disabled=true;
     await slidePuzzle(result);if(serial!==puzzleMotionSerial)return;
     puzzleAnimating=false;renderPuzzle(undefined,result.merged,spawn);const next=queuedDirection;queuedDirection=null;if(next)movePuzzle(next);
@@ -134,13 +151,13 @@ window.GameRoom=(()=>{
   function setup(){
     if(ready)return;ready=true;
     document.querySelectorAll('[data-game]').forEach(button=>button.onclick=()=>choose(button.dataset.game));$('#memory-reset').onclick=resetMemory;$('#sudoku-reset').onclick=resetSudoku;$('#sudoku-save').onclick=saveSudoku;$('#puzzle-reset').onclick=resetPuzzle;$('#puzzle-save').onclick=savePuzzle;
-    $('#puzzle-undo').onclick=()=>{if(!undo||puzzleAnimating)return;cancelPuzzleMotion();numbers=undo.numbers;score=undo.score;keepPlaying=undo.keepPlaying;undo=null;renderPuzzle();};
+    $('#puzzle-undo').onclick=()=>{if(!undo||puzzleAnimating||!Puzzle2048.canMove(numbers))return;cancelPuzzleMotion();numbers=undo.numbers;score=undo.score;keepPlaying=undo.keepPlaying;undo=null;renderPuzzle();};
     $('#puzzle-continue').onclick=()=>{keepPlaying=true;renderPuzzle();};
     document.querySelectorAll('[data-direction]').forEach(button=>button.onclick=()=>movePuzzle(button.dataset.direction));
     document.addEventListener('keydown',event=>{if(selected!=='puzzle'||$('#games-view').hidden||event.target.closest('input,select,textarea,[contenteditable=true]')||event.ctrlKey||event.metaKey||event.altKey)return;const keys={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',a:'left',d:'right',w:'up',s:'down'};if(keys[event.key]){event.preventDefault();movePuzzle(keys[event.key]);}});
     document.querySelectorAll('[data-sudoku-number]').forEach(b=>b.onclick=()=>fillSudoku(Number(b.dataset.sudokuNumber)));$('#sudoku-hint').onclick=()=>fillSudoku(0,true);$('#sudoku-mark').onclick=()=>{if(SudokuEngine.solved(sudokuCells)||sudokuSelected<0||sudoku.puzzle[sudokuSelected])return;if(sudokuMarks.has(sudokuSelected))sudokuMarks.delete(sudokuSelected);else sudokuMarks.add(sudokuSelected);renderSudoku();};
     document.addEventListener('keydown',event=>{if(selected!=='sudoku'||$('#games-view').hidden||event.target.closest('input,select,textarea,[contenteditable=true]')||event.ctrlKey||event.metaKey||event.altKey)return;if(/^[1-9]$/.test(event.key)){event.preventDefault();fillSudoku(Number(event.key));}else if(['Backspace','Delete','0'].includes(event.key)){event.preventDefault();fillSudoku(0);}});
-    const board=$('#puzzle-board');board.addEventListener('pointerdown',event=>{if(!event.isPrimary||event.button!==0)return;touch={x:event.clientX,y:event.clientY,id:event.pointerId};board.setPointerCapture(event.pointerId);});
+    const board=$('#puzzle-board');board.addEventListener('pointerdown',event=>{if(!event.isPrimary||event.button!==0||event.target.closest('button')||puzzleBlocked())return;touch={x:event.clientX,y:event.clientY,id:event.pointerId};board.setPointerCapture(event.pointerId);});
     board.addEventListener('pointerup',event=>{if(!touch||touch.id!==event.pointerId)return;const dx=event.clientX-touch.x,dy=event.clientY-touch.y;touch=null;if(Math.max(Math.abs(dx),Math.abs(dy))<24)return;movePuzzle(Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up');});
     board.addEventListener('pointercancel',()=>touch=null);
     resetMemory();resetSudoku();resetPuzzle();document.addEventListener('visibilitychange',()=>{if(document.hidden)leave();});window.addEventListener('pagehide',leave);
